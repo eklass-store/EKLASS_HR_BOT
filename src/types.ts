@@ -6,6 +6,7 @@ export interface Env {
   DB: D1Database;
   BOT_TOKEN: string;
   TIMEZONE?: string; // e.g. 'Africa/Cairo', 'Asia/Riyadh'
+  API_KEY?: string;
 }
 
 export interface Employee {

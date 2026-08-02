@@ -51,3 +51,10 @@ export async function getTotalActiveLoan(env: Env, employeeId: number): Promise<
   ).bind(employeeId).first() as any;
   return result?.total ?? 0;
 }
+
+/** تحويل كافة السلف المعتمدة إلى مسددة بعد إصدار الراتب */
+export async function markEmployeeLoansAsPaid(env: Env, employeeId: number): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE Loans SET status = 'paid' WHERE employee_id = ? AND status = 'approved'"
+  ).bind(employeeId).run();
+}

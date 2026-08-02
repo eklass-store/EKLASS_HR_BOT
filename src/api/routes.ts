@@ -9,6 +9,17 @@ export async function handleApiRoutes(
 ): Promise<Response | null> {
   const url = new URL(request.url);
 
+  // Secure API routes
+  if (url.pathname.startsWith('/api/')) {
+    const apiKeyHeader = request.headers.get('X-API-KEY');
+    const apiKeyQuery = url.searchParams.get('api_key');
+    const providedKey = apiKeyHeader || apiKeyQuery;
+
+    if (!env.API_KEY || providedKey !== env.API_KEY) {
+      return new Response('Unauthorized: Invalid or missing API key', { status: 401 });
+    }
+  }
+
   // ── GET /api/stats ─────────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/stats') {
     const [empCount, attCount, pendingLeaves, pendingLoans] = await Promise.all([

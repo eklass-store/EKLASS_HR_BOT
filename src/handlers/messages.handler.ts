@@ -22,6 +22,7 @@ import { getMainMenu, getAdminMenu, getEmployeeManagementMenu } from '../keyboar
 import { getLeaveApprovalKeyboard, LEAVE_TYPE_NAMES } from '../keyboards/leave.keyboards';
 import { getLoanApprovalKeyboard } from '../keyboards/loan.keyboards';
 import { isValidDate, isValidTime } from '../utils/time';
+import { escapeMarkdown } from '../utils/markdown';
 
 const SETTING_NAMES: Record<string, string> = {
   work_start_time:           'وقت بداية الدوام',
@@ -96,8 +97,8 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         try {
           await bot.api.sendMessage(
             admin.telegram_id,
-            `📩 *طلب إجازة جديد*\n\nالموظف: ${emp.full_name}\nالنوع: ${LEAVE_TYPE_NAMES[type] ?? type}\nمن: ${startDate}\nإلى: ${endDate}` +
-            (reason ? `\nالسبب: ${reason}` : ''),
+            `📩 *طلب إجازة جديد*\n\nالموظف: ${escapeMarkdown(emp.full_name)}\nالنوع: ${LEAVE_TYPE_NAMES[type] ?? type}\nمن: ${startDate}\nإلى: ${endDate}` +
+            (reason ? `\nالسبب: ${escapeMarkdown(reason)}` : ''),
             { parse_mode: 'Markdown', reply_markup: kb }
           );
         } catch (_) {}
@@ -141,7 +142,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         try {
           await bot.api.sendMessage(
             admin.telegram_id,
-            `💸 *طلب سلفة جديد*\n\nالموظف: ${emp.full_name}\nالمبلغ: ${amount} ريال\nالسبب: ${text}`,
+            `💸 *طلب سلفة جديد*\n\nالموظف: ${escapeMarkdown(emp.full_name)}\nالمبلغ: ${amount} ريال\nالسبب: ${escapeMarkdown(text)}`,
             { parse_mode: 'Markdown', reply_markup: kb }
           );
         } catch (_) {}
@@ -165,7 +166,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       }
       const existing = await getEmployeeByTelegramId(env, text);
       if (existing) {
-        return ctx.reply(`⚠️ هذا الـ ID مسجل بالفعل للموظف: *${existing.full_name}*`, {
+        return ctx.reply(`⚠️ هذا الـ ID مسجل بالفعل للموظف: *${escapeMarkdown(existing.full_name)}*`, {
           parse_mode: 'Markdown',
         });
       }
@@ -208,7 +209,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       await clearState(env, tid);
 
       return ctx.reply(
-        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${fullName}\nالراتب: ${salary} ريال\nTelegram ID: \`${telegramId}\``,
+        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${escapeMarkdown(fullName)}\nالراتب: ${salary} ريال\nTelegram ID: \`${telegramId}\``,
         { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
       );
     }
@@ -233,7 +234,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       await clearState(env, tid);
 
       return ctx.reply(
-        `✅ تم تحديث راتب *${employee?.full_name ?? 'الموظف'}* إلى *${salary}* ريال`,
+        `✅ تم تحديث راتب *${escapeMarkdown(employee?.full_name ?? 'الموظف')}* إلى *${salary}* ريال`,
         { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
       );
     }
@@ -280,7 +281,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       let sentCount = 0;
       for (const e of employees) {
         try {
-          await bot.api.sendMessage(e.telegram_id, `📢 *تعميم إداري:*\n\n${text}`, {
+          await bot.api.sendMessage(e.telegram_id, `📢 *تعميم إداري:*\n\n${escapeMarkdown(text)}`, {
             parse_mode: 'Markdown',
           });
           sentCount++;

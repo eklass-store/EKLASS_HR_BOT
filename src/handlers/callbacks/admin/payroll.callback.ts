@@ -8,7 +8,7 @@ import { Env } from '../../../types';
 import { getEmployeeByTelegramId, getAllEmployees } from '../../../db/employees.db';
 import { issuePayroll, hasPayrollForMonth } from '../../../db/payroll.db';
 import { getTotalLateMinutes } from '../../../db/attendance.db';
-import { getTotalActiveLoan } from '../../../db/loans.db';
+import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../../../db/loans.db';
 import { getSettings } from '../../../db/settings.db';
 import { getAdminMenu } from '../../../keyboards/main.keyboards';
 import { getCurrentMonth } from '../../../utils/time';
@@ -63,6 +63,11 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
       const netSalary     = employee.base_salary - totalDed;
 
       await issuePayroll(env, employee.id, month, employee.base_salary, totalDed, netSalary);
+      
+      // تحويل السلف إلى مدفوعة لكي لا تخصم مرة أخرى
+      if (activeLoan > 0) {
+        await markEmployeeLoansAsPaid(env, employee.id);
+      }
 
       // إشعار الموظف براتبه
       try {
@@ -80,16 +85,30 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
       issuedCount++;
     }
 
-    const resultMsg =
+    const headerMsg =
       `✅ *اكتمل إصدار رواتب ${month}*\n\n` +
       `صدر: ${issuedCount} موظف\n` +
       `تخطّى (مُصدر مسبقاً): ${skippedCount}\n` +
-      (summary ? `\n📋 *التفاصيل:*\n${summary}` : '');
+      (summary ? `\n📋 *التفاصيل:*\n` : '');
 
-    await ctx.editMessageText(resultMsg, {
+    await ctx.editMessageText(headerMsg, {
       parse_mode: 'Markdown',
-      reply_markup: getAdminMenu(),
+      reply_markup: summary ? undefined : getAdminMenu(),
     });
+
+    if (summary) {
+      // تقسيم النص الطويل لتجنب تجاوز حد 4096 حرف في تليجرام
+      const chunkSize = 3500;
+      for (let i = 0; i < summary.length; i += chunkSize) {
+        const chunk = summary.substring(i, i + chunkSize);
+        const isLast = (i + chunkSize >= summary.length);
+        await bot.api.sendMessage(tid, chunk, {
+          parse_mode: 'Markdown',
+          reply_markup: isLast ? getAdminMenu() : undefined
+        });
+      }
+    }
+    
     await ctx.answerCallbackQuery();
   });
 }

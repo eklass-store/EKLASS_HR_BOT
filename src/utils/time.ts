@@ -54,7 +54,9 @@ export function getCurrentMonth(timezone = 'Africa/Cairo'): string {
 export function isValidDate(dateStr: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const d = new Date(dateStr);
-  return d instanceof Date && !isNaN(d.getTime());
+  if (!(d instanceof Date) || isNaN(d.getTime())) return false;
+  // Ensure the parsed date exactly matches the input (prevents 2024-02-30 -> 2024-03-01)
+  return d.toISOString().startsWith(dateStr);
 }
 
 /**
