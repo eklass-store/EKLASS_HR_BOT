@@ -18,7 +18,7 @@ export function registerStartCommand(bot: Bot, env: Env): void {
         const admins = await getAdmins(env);
         if (admins.length === 0) { // Only if no admins exist yet
           const fullName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || 'Admin';
-          await addEmployee(env, tid, fullName, 0, 'admin');
+          await addEmployee(env, tid, fullName, 0, 'الإدارة', 'admin');
           
           await ctx.reply(
             `🎉 مرحباً بك يا *${escapeMarkdown(fullName)}*!\n\nتم تعيينك كـ *مدير النظام (Admin)* بناءً على الإعدادات الأولية.`,

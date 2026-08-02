@@ -224,7 +224,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await setState(env, tid, 'admin_awaiting_emp_name', { telegramId: text });
       return ctx.reply(
-        `✅ Telegram ID: \`${text}\`\n\n*الخطوة 2/3* — أرسل الاسم الكامل للموظف:`,
+        `✅ Telegram ID: \`${text}\`\n\n*الخطوة 2/4* — أرسل الاسم الكامل للموظف:`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -235,9 +235,22 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
     if (state === 'admin_awaiting_emp_name') {
       if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
 
-      await setState(env, tid, 'admin_awaiting_emp_salary', { ...data, fullName: text });
+      await setState(env, tid, 'admin_awaiting_emp_department', { ...data, fullName: text });
       return ctx.reply(
-        `✅ الاسم: *${text}*\n\n*الخطوة 3/3* — أرسل الراتب الأساسي (بالأرقام):`,
+        `✅ الاسم: *${text}*\n\n*الخطوة 3/4* — أرسل المسمى الوظيفي (القسم):\nمثال: محاسب، كاشير، مهندس`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // 7.5 [ADMIN] إضافة موظف — المسمى الوظيفي
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_emp_department') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      await setState(env, tid, 'admin_awaiting_emp_salary', { ...data, department: text });
+      return ctx.reply(
+        `✅ المسمى الوظيفي: *${text}*\n\n*الخطوة 4/4* — أرسل الراتب الأساسي (بالأرقام):`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -255,13 +268,14 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       const telegramId = data['telegramId'] as string;
       const fullName   = data['fullName']   as string;
+      const department = data['department'] as string;
 
-      await addEmployee(env, telegramId, fullName, salary);
-      await logAction(env, emp.id, 'ADD_EMPLOYEE', `تم إضافة الموظف ${fullName} (TID: ${telegramId}) براتب ${salary}`);
+      await addEmployee(env, telegramId, fullName, salary, department);
+      await logAction(env, emp.id, 'ADD_EMPLOYEE', `تم إضافة الموظف ${fullName} (${department}) براتب ${salary}`);
       await clearState(env, tid);
 
       return ctx.reply(
-        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${escapeMarkdown(fullName)}\nالراتب: ${salary} جنيه\nTelegram ID: \`${telegramId}\``,
+        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${escapeMarkdown(fullName)}\nالمسمى الوظيفي: ${escapeMarkdown(department)}\nالراتب: ${salary} جنيه\nTelegram ID: \`${telegramId}\``,
         { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
       );
     }
@@ -333,6 +347,9 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       const employees = await getAllEmployees(env);
       let sentCount = 0;
       for (const e of employees) {
+        // استثناء المدير الذي أرسل التعميم
+        if (e.telegram_id === emp.telegram_id) continue;
+
         try {
           await bot.api.sendMessage(e.telegram_id, `📢 *تعميم إداري:*\n\n${escapeMarkdown(text)}`, {
             parse_mode: 'Markdown',

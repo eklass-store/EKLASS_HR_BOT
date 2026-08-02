@@ -27,15 +27,16 @@ export function getNow(timezone = 'Africa/Cairo'): { date: string; time: string 
   return { date, time };
 }
 
+export function toMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
 /**
  * يحسب دقائق التأخير بدقة رقمية (لا مقارنة نصية)
  * FIX BUG-03
  */
 export function calcLateMinutes(checkInTime: string, workStartTime: string): number {
-  const toMinutes = (t: string): number => {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
   const diff = toMinutes(checkInTime) - toMinutes(workStartTime);
   return diff > 0 ? diff : 0;
 }
@@ -46,6 +47,15 @@ export function calcLateMinutes(checkInTime: string, workStartTime: string): num
 export function getCurrentMonth(timezone = 'Africa/Cairo'): string {
   const { date } = getNow(timezone);
   return date.substring(0, 7);
+}
+
+/**
+ * يرجع عدد الأيام في شهر معين
+ * @param month YYYY-MM
+ */
+export function getDaysInMonth(month: string): number {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
 }
 
 /**

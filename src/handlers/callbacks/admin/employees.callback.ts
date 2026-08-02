@@ -72,6 +72,8 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
       
     if (employee.role !== 'admin') {
       kb.text('👑 ترقية لمدير', `admin_emp_promote_${empId}`).row();
+    } else if (empId !== admin.id) {
+      kb.text('⏬ إلغاء الترقية (إرجاع لموظف)', `admin_emp_demote_${empId}`).row();
     }
     
     kb.text('🔙 رجوع للقائمة',  'admin_emp_list');
@@ -79,6 +81,7 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
     const text =
       `👤 *بيانات الموظف*\n\n` +
       `الاسم: ${escapeMarkdown(employee.full_name)}\n` +
+      `المسمى الوظيفي: ${escapeMarkdown(employee.department || 'غير محدد')}\n` +
       `الدور: ${employee.role === 'admin' ? '👑 مدير' : '👤 موظف'}\n` +
       `الراتب: ${employee.base_salary} جنيه\n` +
       `Telegram ID: \`${employee.telegram_id}\`\n` +
@@ -150,6 +153,31 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
 
     await ctx.editMessageText(
       `✅ تمت ترقية *${escapeMarkdown(employee.full_name)}* إلى رتبة مدير بنجاح.`,
+      { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
+    );
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── إلغاء ترقية المدير ────────────────────────────────────
+  bot.callbackQuery(/^admin_emp_demote_\d+$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const admin = await getEmployeeByTelegramId(env, tid);
+    if (!admin || admin.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+
+    const empId = parseInt(ctx.callbackQuery.data.split('_').at(-1)!);
+    if (empId === admin.id) return ctx.answerCallbackQuery('لا يمكنك إلغاء ترقية حسابك الخاص!');
+
+    const employee = await env.DB.prepare('SELECT full_name FROM Employees WHERE id = ? AND role = "admin"')
+      .bind(empId).first() as any;
+
+    if (!employee) return ctx.answerCallbackQuery('لا يمكن إلغاء ترقية هذا الموظف (قد يكون موظفاً بالفعل)!');
+
+    const { updateEmployeeRole } = await import('../../../db/employees.db');
+    await updateEmployeeRole(env, empId, 'employee');
+    await logAction(env, admin.id, 'DEMOTE_ADMIN', `تم إلغاء ترقية المدير ID ${empId} (${employee?.full_name}) وإرجاعه لموظف`);
+
+    await ctx.editMessageText(
+      `✅ تم سحب الصلاحيات من *${escapeMarkdown(employee.full_name)}* وإرجاعه لرتبة موظف بنجاح.`,
       { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
     );
     await ctx.answerCallbackQuery();

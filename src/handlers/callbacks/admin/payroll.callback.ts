@@ -11,7 +11,7 @@ import { getTotalLateMinutes } from '../../../db/attendance.db';
 import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../../../db/loans.db';
 import { getSettings } from '../../../db/settings.db';
 import { getAdminMenu } from '../../../keyboards/main.keyboards';
-import { getCurrentMonth } from '../../../utils/time';
+import { getCurrentMonth, getDaysInMonth, calcLateMinutes } from '../../../utils/time';
 import { escapeMarkdown } from '../../../utils/markdown';
 
 export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
@@ -43,7 +43,14 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
 
     const month = ctx.callbackQuery.data.replace('admin_payroll_issue_', '');
     const settings = await getSettings(env);
-    const deductionPerMin = parseFloat(settings['late_deduction_per_minute'] ?? '0');
+    
+    const startTime = settings['work_start_time'] ?? '09:00';
+    const endTime = settings['work_end_time'] ?? '17:00';
+    
+    // إجمالي دقائق العمل في اليوم
+    const workMinutes = calcLateMinutes(endTime, startTime) || 480; // 8 hours default if 0
+    
+    const daysInMonth = getDaysInMonth(month);
 
     const employees = await getAllEmployees(env);
     let issuedCount = 0;
@@ -57,13 +64,20 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
         continue;
       }
 
-      const lateMinutes   = await getTotalLateMinutes(env, employee.id, month);
-      const lateDeduction = lateMinutes * deductionPerMin;
-      const activeLoan    = await getTotalActiveLoan(env, employee.id);
-      const totalDed      = lateDeduction + activeLoan;
-      const netSalary     = Math.max(0, employee.base_salary - totalDed);
+      // الحساب الديناميكي للراتب
+      const baseSalary = employee.base_salary;
+      const dailyRate = baseSalary / 30; // بناء على شهر 30 يوم قياسي
+      const dynamicMonthSalary = dailyRate * daysInMonth; // 28, 30, or 31 days
+      const minuteRate = dailyRate / workMinutes; // أجر الدقيقة
 
-      await issuePayroll(env, employee.id, month, employee.base_salary, totalDed, netSalary);
+      const lateMinutes   = await getTotalLateMinutes(env, employee.id, month);
+      const lateDeduction = lateMinutes * minuteRate;
+      const activeLoan    = await getTotalActiveLoan(env, employee.id);
+      
+      const totalDed      = lateDeduction + activeLoan;
+      const netSalary     = Math.max(0, dynamicMonthSalary - totalDed);
+
+      await issuePayroll(env, employee.id, month, dynamicMonthSalary, totalDed, netSalary);
       
       // تحويل السلف إلى مدفوعة لكي لا تخصم مرة أخرى
       if (activeLoan > 0) {
@@ -75,7 +89,7 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
         await bot.api.sendMessage(
           employee.telegram_id,
           `💰 *تم إصدار راتبك — ${month}*\n\n` +
-          `📌 الأساسي: ${employee.base_salary.toFixed(2)} جنيه\n` +
+          `📌 الأساسي المستحق (${daysInMonth} يوم): ${dynamicMonthSalary.toFixed(2)} جنيه\n` +
           (totalDed > 0 ? `➖ الخصومات: ${totalDed.toFixed(2)} جنيه\n` : '') +
           `\n💵 *الصافي: ${netSalary.toFixed(2)} جنيه*`,
           { parse_mode: 'Markdown' }

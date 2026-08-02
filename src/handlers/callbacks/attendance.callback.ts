@@ -41,6 +41,15 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
     // FIX BUG-03: calcLateMinutes — حساب رقمي دقيق
     const lateMinutes = calcLateMinutes(time, startTime);
 
+    // المنع من الحضور بعد ساعة (غياب تلقائي)
+    if (lateMinutes > 60) {
+      await ctx.editMessageText(
+        `❌ *عفواً! لقد تجاوزت حد التأخير المسموح به (ساعة).* \n\nوقت الدوام: ${startTime}\nوقتك الحالي: ${time}\nالتأخير: ${lateMinutes} دقيقة\n\nتم تسجيلك **غياب** لهذا اليوم ولن تتمكن من تسجيل الحضور.`,
+        { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
+      );
+      return ctx.answerCallbackQuery();
+    }
+
     await createAttendance(env, emp.id, date, time, lateMinutes);
 
     let msg = `✅ تم تسجيل حضورك الساعة *${time}*`;
