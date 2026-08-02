@@ -36,10 +36,24 @@ export async function addEmployee(
   baseSalary: number,
   role: 'admin' | 'employee' = 'employee'
 ): Promise<number> {
-  const result = await env.DB.prepare(
-    "INSERT INTO Employees (telegram_id, full_name, base_salary, role) VALUES (?, ?, ?, ?)"
-  ).bind(telegramId, fullName, baseSalary, role).run();
-  return result.meta.last_row_id as number;
+  // Check if an employee (active or inactive) already exists with this telegramId
+  const existing = await env.DB.prepare(
+    "SELECT id FROM Employees WHERE telegram_id = ?"
+  ).bind(telegramId).first() as { id: number } | null;
+
+  if (existing) {
+    // Reactivate and update their info
+    await env.DB.prepare(
+      "UPDATE Employees SET full_name = ?, base_salary = ?, role = ?, is_active = 1 WHERE id = ?"
+    ).bind(fullName, baseSalary, role, existing.id).run();
+    return existing.id;
+  } else {
+    // Insert new employee
+    const result = await env.DB.prepare(
+      "INSERT INTO Employees (telegram_id, full_name, base_salary, role) VALUES (?, ?, ?, ?)"
+    ).bind(telegramId, fullName, baseSalary, role).run();
+    return result.meta.last_row_id as number;
+  }
 }
 
 export async function updateEmployeeSalary(env: Env, id: number, salary: number): Promise<void> {
