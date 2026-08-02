@@ -29,7 +29,7 @@ export function registerAdminSettingsCallbacks(bot: Bot, env: Env): void {
       `⚙️ *إعدادات الدوام الحالية:*\n\n` +
       `🕘 بداية الدوام:          ${s['work_start_time']        ?? '09:00'}\n` +
       `🕔 نهاية الدوام:          ${s['work_end_time']          ?? '17:00'}\n` +
-      `💰 خصم دقيقة التأخير:    ${s['late_deduction_per_minute'] ?? '0'} ريال\n\n` +
+      `💰 خصم دقيقة التأخير:    ${s['late_deduction_per_minute'] ?? '0'} جنيه\n\n` +
       `_(أرسل /cancel للإلغاء في أي وقت)_`,
       { parse_mode: 'Markdown', reply_markup: kb }
     );
@@ -72,7 +72,7 @@ export function registerAdminSettingsCallbacks(bot: Bot, env: Env): void {
 
     await setState(env, tid, 'admin_awaiting_setting', { key: 'late_deduction_per_minute' });
     await ctx.editMessageText(
-      '💸 أرسل مقدار الخصم لكل دقيقة تأخير (بالريال):\nمثال: `2.5`\n_(0 = لا خصم)_',
+      '💸 أرسل مقدار الخصم لكل دقيقة تأخير (بالجنيه):\nمثال: `2.5`\n_(0 = لا خصم)_',
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

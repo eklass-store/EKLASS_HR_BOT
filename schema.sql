@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS Settings (
 INSERT OR IGNORE INTO Settings (key, value) VALUES
     ('work_start_time',           '09:00'),
     ('work_end_time',             '17:00'),
-    ('late_deduction_per_minute', '0'),     -- NEW: ريال لكل دقيقة تأخير
+    ('late_deduction_per_minute', '0'),     -- NEW: جنيه لكل دقيقة تأخير
     ('annual_leave_quota',        '21'),    -- NEW: الحصة السنوية للإجازات
     ('max_loan_percentage',       '50');    -- NEW: الحد الأقصى للسلفة (نسبة مئوية من الراتب)
 

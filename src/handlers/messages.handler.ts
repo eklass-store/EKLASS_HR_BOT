@@ -112,6 +112,21 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       const endDate   = data['endDate']   as string;
       const type      = data['type']      as string;
 
+      const { getLeaveBalance } = await import('../db/leaves.db');
+      const balance = await getLeaveBalance(env, emp.id);
+      
+      const startD = new Date(startDate);
+      const endD = new Date(endDate);
+      const requestedDays = Math.floor((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      
+      if (balance.approved + requestedDays > balance.quota) {
+        await clearState(env, tid);
+        return ctx.reply(
+          `⚠️ عذراً، لا يمكنك طلب إجازة لمدة ${requestedDays} يوم.\nرصيدك المتبقي هو ${balance.quota - balance.approved} يوم فقط.`,
+          { reply_markup: getMainMenu(emp.role === 'admin') }
+        );
+      }
+
       const leaveId = await createLeave(env, emp.id, startDate, endDate, type, reason);
 
       // إشعار الأدمن
@@ -152,12 +167,12 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       const maxAmount = emp.base_salary * (maxPercentage / 100);
 
       if (amount > maxAmount) {
-        return ctx.reply(`⚠️ عذراً، الحد الأقصى للسلفة هو ${maxPercentage}% من راتبك الأساسي.\nالحد الأقصى لك: *${maxAmount}* ريال.`, { parse_mode: 'Markdown' });
+        return ctx.reply(`⚠️ عذراً، الحد الأقصى للسلفة هو ${maxPercentage}% من راتبك الأساسي.\nالحد الأقصى لك: *${maxAmount}* جنيه.`, { parse_mode: 'Markdown' });
       }
 
       await setState(env, tid, 'awaiting_loan_reason', { ...data, amount });
       return ctx.reply(
-        `✅ المبلغ: *${amount}* ريال\n\n📝 أرسل *سبب* طلب السلفة:`,
+        `✅ المبلغ: *${amount}* جنيه\n\n📝 أرسل *سبب* طلب السلفة:`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -178,7 +193,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         try {
           await bot.api.sendMessage(
             admin.telegram_id,
-            `💸 *طلب سلفة جديد*\n\nالموظف: ${escapeMarkdown(emp.full_name)}\nالمبلغ: ${amount} ريال\nالسبب: ${escapeMarkdown(text)}`,
+            `💸 *طلب سلفة جديد*\n\nالموظف: ${escapeMarkdown(emp.full_name)}\nالمبلغ: ${amount} جنيه\nالسبب: ${escapeMarkdown(text)}`,
             { parse_mode: 'Markdown', reply_markup: kb }
           );
         } catch (_) {}
@@ -186,7 +201,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await clearState(env, tid);
       return ctx.reply(
-        `✅ تم إرسال طلب السلفة بمبلغ *${amount}* ريال\nبانتظار موافقة الإدارة ⏳`,
+        `✅ تم إرسال طلب السلفة بمبلغ *${amount}* جنيه\nبانتظار موافقة الإدارة ⏳`,
         { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
       );
     }
@@ -246,7 +261,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       await clearState(env, tid);
 
       return ctx.reply(
-        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${escapeMarkdown(fullName)}\nالراتب: ${salary} ريال\nTelegram ID: \`${telegramId}\``,
+        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${escapeMarkdown(fullName)}\nالراتب: ${salary} جنيه\nTelegram ID: \`${telegramId}\``,
         { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
       );
     }
@@ -272,7 +287,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       await clearState(env, tid);
 
       return ctx.reply(
-        `✅ تم تحديث راتب *${escapeMarkdown(employee?.full_name ?? 'الموظف')}* إلى *${salary}* ريال`,
+        `✅ تم تحديث راتب *${escapeMarkdown(employee?.full_name ?? 'الموظف')}* إلى *${salary}* جنيه`,
         { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
       );
     }
@@ -324,6 +339,8 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
           });
           sentCount++;
         } catch (_) {}
+        // Sleep for 50ms to prevent Telegram rate limit (Too Many Requests)
+        await new Promise(r => setTimeout(r, 50));
       }
 
       await clearState(env, tid);

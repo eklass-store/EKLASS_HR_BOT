@@ -32,7 +32,7 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
 
     const activeLoan = await getTotalActiveLoan(env, emp.id);
     const activeLoanMsg = activeLoan > 0
-      ? `📊 سلفتك النشطة الحالية: *${activeLoan}* ريال\n\n`
+      ? `📊 سلفتك النشطة الحالية: *${activeLoan}* جنيه\n\n`
       : '';
 
     await setState(env, tid, 'awaiting_loan_amount', { activeLoan });
@@ -67,15 +67,15 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
     const employee = await getEmployeeById(env, loan.employee_id);
     if (employee) {
       const notif = isApprove
-        ? `✅ *تمت الموافقة على سلفتك*\nالمبلغ: *${loan.amount}* ريال\nالسبب: ${escapeMarkdown(loan.reason)}`
-        : `❌ *تم رفض طلب سلفتك*\nالمبلغ: ${loan.amount} ريال\nيرجى التواصل مع الإدارة.`;
+        ? `✅ *تمت الموافقة على سلفتك*\nالمبلغ: *${loan.amount}* جنيه\nالسبب: ${escapeMarkdown(loan.reason)}`
+        : `❌ *تم رفض طلب سلفتك*\nالمبلغ: ${loan.amount} جنيه\nيرجى التواصل مع الإدارة.`;
       try {
         await bot.api.sendMessage(employee.telegram_id, notif, { parse_mode: 'Markdown' });
       } catch (_) {}
     }
 
     await ctx.editMessageText(
-      `${isApprove ? '✅ موافقة' : '❌ رفض'} سلفة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\nالمبلغ: ${loan.amount} ريال`,
+      `${isApprove ? '✅ موافقة' : '❌ رفض'} سلفة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\nالمبلغ: ${loan.amount} جنيه`,
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

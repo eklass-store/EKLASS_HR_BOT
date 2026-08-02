@@ -80,7 +80,7 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
       `👤 *بيانات الموظف*\n\n` +
       `الاسم: ${escapeMarkdown(employee.full_name)}\n` +
       `الدور: ${employee.role === 'admin' ? '👑 مدير' : '👤 موظف'}\n` +
-      `الراتب: ${employee.base_salary} ريال\n` +
+      `الراتب: ${employee.base_salary} جنيه\n` +
       `Telegram ID: \`${employee.telegram_id}\`\n` +
       `الحالة: ${employee.is_active ? '✅ نشط' : '🚫 محذوف'}\n` +
       `مسجل منذ: ${employee.created_at}`;
@@ -169,7 +169,7 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
 
     await setState(env, tid, 'admin_awaiting_salary_update', { empId });
     await ctx.editMessageText(
-      `💰 *تعديل راتب: ${escapeMarkdown(employee.full_name)}*\n\nالراتب الحالي: ${employee.base_salary} ريال\n\nأرسل الراتب الجديد بالأرقام:\nمثال: 3500`,
+      `💰 *تعديل راتب: ${escapeMarkdown(employee.full_name)}*\n\nالراتب الحالي: ${employee.base_salary} جنيه\n\nأرسل الراتب الجديد بالأرقام:\nمثال: 3500`,
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

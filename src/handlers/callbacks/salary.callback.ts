@@ -29,19 +29,21 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
 
     const history = await getEmployeePayroll(env, emp.id);
 
-    let text = `💰 *تفاصيل الراتب — ${month}*\n\n`;
-    text += `📌 الراتب الأساسي:    ${emp.base_salary.toFixed(2)} ريال\n`;
-    text += `⏱ تأخير الشهر:       ${lateMinutes} دقيقة\n`;
-    if (lateDeduction > 0)
-      text += `➖ خصم التأخير:      ${lateDeduction.toFixed(2)} ريال\n`;
-    if (activeLoan > 0)
-      text += `➖ سلفة نشطة:        ${activeLoan.toFixed(2)} ريال\n`;
-    text += `\n💵 *الصافي المتوقع: ${netSalary.toFixed(2)} ريال*\n`;
+    let text = `💰 *تفاصيل راتب شهر ${month}*\n\n`;
+    text += `📌 الراتب الأساسي:    ${emp.base_salary.toFixed(2)} جنيه\n`;
+
+    if (lateDeduction > 0) {
+      text += `➖ خصم التأخير:      ${lateDeduction.toFixed(2)} جنيه\n`;
+    }
+    if (activeLoan > 0) {
+      text += `➖ سلفة نشطة:        ${activeLoan.toFixed(2)} جنيه\n`;
+    }
+    text += `\n💵 *الصافي المتوقع: ${netSalary.toFixed(2)} جنيه*\n`;
 
     if (history.length > 0) {
-      text += '\n📊 *آخر الرواتب المصدرة:*\n';
-      for (const p of history.slice(0, 3)) {
-        text += `• ${p.month}: ${p.net_salary.toFixed(2)} ريال\n`;
+      text += `\n📅 *الرواتب السابقة:*\n`;
+      for (const p of history) {
+        text += `• ${p.month}: ${p.net_salary.toFixed(2)} جنيه\n`;
       }
     }
 

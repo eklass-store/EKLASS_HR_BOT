@@ -61,7 +61,7 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
       const lateDeduction = lateMinutes * deductionPerMin;
       const activeLoan    = await getTotalActiveLoan(env, employee.id);
       const totalDed      = lateDeduction + activeLoan;
-      const netSalary     = employee.base_salary - totalDed;
+      const netSalary     = Math.max(0, employee.base_salary - totalDed);
 
       await issuePayroll(env, employee.id, month, employee.base_salary, totalDed, netSalary);
       
@@ -75,14 +75,17 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
         await bot.api.sendMessage(
           employee.telegram_id,
           `💰 *تم إصدار راتبك — ${month}*\n\n` +
-          `📌 الأساسي: ${employee.base_salary.toFixed(2)} ريال\n` +
-          (totalDed > 0 ? `➖ الخصومات: ${totalDed.toFixed(2)} ريال\n` : '') +
-          `\n💵 *الصافي: ${netSalary.toFixed(2)} ريال*`,
+          `📌 الأساسي: ${employee.base_salary.toFixed(2)} جنيه\n` +
+          (totalDed > 0 ? `➖ الخصومات: ${totalDed.toFixed(2)} جنيه\n` : '') +
+          `\n💵 *الصافي: ${netSalary.toFixed(2)} جنيه*`,
           { parse_mode: 'Markdown' }
         );
       } catch (_) {}
 
-      summary += `• ${escapeMarkdown(employee.full_name)}: ${netSalary.toFixed(2)} ريال\n`;
+      // Sleep for 50ms to prevent Telegram rate limit (Too Many Requests)
+      await new Promise(r => setTimeout(r, 50));
+
+      summary += `• ${escapeMarkdown(employee.full_name)}: ${netSalary.toFixed(2)} جنيه\n`;
       issuedCount++;
     }
 
