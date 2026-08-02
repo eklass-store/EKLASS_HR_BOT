@@ -215,6 +215,7 @@ export default {
     if (request.method === "POST" && url.pathname !== "/api/stats") {
       try {
         const payload = await request.json();
+        await bot.init();
         await bot.handleUpdate(payload as any);
         return new Response("OK");
       } catch (err) {
