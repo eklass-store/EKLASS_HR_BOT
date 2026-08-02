@@ -7,6 +7,8 @@ import { Env } from '../../../types';
 import { getEmployeeByTelegramId, getAllEmployees, softDeleteEmployee } from '../../../db/employees.db';
 import { setState } from '../../../db/state.db';
 import { getEmployeeManagementMenu, getAdminMenu } from '../../../keyboards/main.keyboards';
+import { escapeMarkdown } from '../../../utils/markdown';
+import { logAction } from '../../../db/audit.db';
 
 export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
 
@@ -66,12 +68,17 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
 
     const kb = new InlineKeyboard()
       .text('💰 تعديل الراتب',   `admin_emp_salary_${empId}`).row()
-      .text('🗑️ حذف الموظف',    `admin_emp_delete_${empId}`).row()
-      .text('🔙 رجوع للقائمة',  'admin_emp_list');
+      .text('🗑️ حذف الموظف',    `admin_emp_delete_${empId}`).row();
+      
+    if (employee.role !== 'admin') {
+      kb.text('👑 ترقية لمدير', `admin_emp_promote_${empId}`).row();
+    }
+    
+    kb.text('🔙 رجوع للقائمة',  'admin_emp_list');
 
     const text =
       `👤 *بيانات الموظف*\n\n` +
-      `الاسم: ${employee.full_name}\n` +
+      `الاسم: ${escapeMarkdown(employee.full_name)}\n` +
       `الدور: ${employee.role === 'admin' ? '👑 مدير' : '👤 موظف'}\n` +
       `الراتب: ${employee.base_salary} ريال\n` +
       `Telegram ID: \`${employee.telegram_id}\`\n` +
@@ -99,7 +106,7 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
       .text('❌ إلغاء',      `admin_emp_view_${empId}`);
 
     await ctx.editMessageText(
-      `⚠️ *تأكيد الحذف*\n\nهل تريد حذف الموظف:\n*${employee?.full_name ?? ''}*؟\n\n_(الحذف ناعم — البيانات التاريخية محفوظة)_`,
+      `⚠️ *تأكيد الحذف*\n\nهل تريد حذف الموظف:\n*${escapeMarkdown(employee?.full_name ?? '')}*؟\n\n_(الحذف ناعم — البيانات التاريخية محفوظة)_`,
       { parse_mode: 'Markdown', reply_markup: kb }
     );
     await ctx.answerCallbackQuery();
@@ -116,9 +123,33 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
       .bind(empId).first() as any;
 
     await softDeleteEmployee(env, empId);
+    await logAction(env, admin.id, 'DELETE_EMPLOYEE', `تم حذف الموظف ID ${empId} (${employee?.full_name})`);
 
     await ctx.editMessageText(
-      `✅ تم حذف الموظف *"${employee?.full_name ?? ''}"* بنجاح.`,
+      `✅ تم حذف الموظف *"${escapeMarkdown(employee?.full_name ?? '')}"* بنجاح.`,
+      { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
+    );
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── ترقية الموظف لمدير ────────────────────────────────────
+  bot.callbackQuery(/^admin_emp_promote_\d+$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const admin = await getEmployeeByTelegramId(env, tid);
+    if (!admin || admin.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+
+    const empId = parseInt(ctx.callbackQuery.data.split('_').at(-1)!);
+    const employee = await env.DB.prepare('SELECT full_name FROM Employees WHERE id = ? AND role = "employee"')
+      .bind(empId).first() as any;
+
+    if (!employee) return ctx.answerCallbackQuery('لا يمكن ترقية هذا الموظف (قد يكون مديراً بالفعل)!');
+
+    const { updateEmployeeRole } = await import('../../../db/employees.db');
+    await updateEmployeeRole(env, empId, 'admin');
+    await logAction(env, admin.id, 'PROMOTE_ADMIN', `تمت ترقية الموظف ID ${empId} (${employee?.full_name}) إلى مدير`);
+
+    await ctx.editMessageText(
+      `✅ تمت ترقية *${escapeMarkdown(employee.full_name)}* إلى رتبة مدير بنجاح.`,
       { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
     );
     await ctx.answerCallbackQuery();
@@ -138,7 +169,7 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
 
     await setState(env, tid, 'admin_awaiting_salary_update', { empId });
     await ctx.editMessageText(
-      `💰 *تعديل راتب: ${employee.full_name}*\n\nالراتب الحالي: ${employee.base_salary} ريال\n\nأرسل الراتب الجديد بالأرقام:\nمثال: 3500`,
+      `💰 *تعديل راتب: ${escapeMarkdown(employee.full_name)}*\n\nالراتب الحالي: ${employee.base_salary} ريال\n\nأرسل الراتب الجديد بالأرقام:\nمثال: 3500`,
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

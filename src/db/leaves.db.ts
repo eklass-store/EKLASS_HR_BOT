@@ -43,18 +43,27 @@ export async function getEmployeeLeaves(env: Env, employeeId: number): Promise<L
 export async function getLeaveBalance(
   env: Env,
   employeeId: number
-): Promise<{ approved: number; pending: number }> {
+): Promise<{ approved: number; pending: number; quota: number }> {
   const year = new Date().getFullYear().toString();
 
   const approved = await env.DB.prepare(
-    "SELECT COUNT(*) AS c FROM Leaves WHERE employee_id = ? AND status = 'approved' AND start_date LIKE ?"
+    "SELECT CAST(SUM(julianday(end_date) - julianday(start_date) + 1) AS INTEGER) AS c FROM Leaves WHERE employee_id = ? AND status = 'approved' AND start_date LIKE ?"
   ).bind(employeeId, `${year}%`).first() as any;
 
   const pending = await env.DB.prepare(
-    "SELECT COUNT(*) AS c FROM Leaves WHERE employee_id = ? AND status = 'pending'"
-  ).bind(employeeId).first() as any;
+    "SELECT CAST(SUM(julianday(end_date) - julianday(start_date) + 1) AS INTEGER) AS c FROM Leaves WHERE employee_id = ? AND status = 'pending' AND start_date LIKE ?"
+  ).bind(employeeId, `${year}%`).first() as any;
 
-  return { approved: approved?.c ?? 0, pending: pending?.c ?? 0 };
+  // Get quota from settings
+  const { getSettings } = await import('./settings.db');
+  const settings = await getSettings(env);
+  const quota = parseInt(settings['annual_leave_quota'] ?? '21');
+
+  return { 
+    approved: approved?.c ?? 0, 
+    pending: pending?.c ?? 0,
+    quota
+  };
 }
 
 /** هل للموظف طلب معلق؟ — لمنع التكرار */

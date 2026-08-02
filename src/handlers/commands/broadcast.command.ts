@@ -6,6 +6,7 @@ import { Bot } from 'grammy';
 import { Env } from '../../types';
 import { getEmployeeByTelegramId, getAllEmployees } from '../../db/employees.db';
 import { createAnnouncement } from '../../db/announcements.db';
+import { escapeMarkdown } from '../../utils/markdown';
 
 export function registerBroadcastCommand(bot: Bot, env: Env): void {
   bot.command('broadcast', async (ctx) => {
@@ -30,7 +31,7 @@ export function registerBroadcastCommand(bot: Bot, env: Env): void {
     let sentCount = 0;
     for (const emp of employees) {
       try {
-        await bot.api.sendMessage(emp.telegram_id, `📢 *تعميم إداري:*\n\n${text}`, {
+        await bot.api.sendMessage(emp.telegram_id, `📢 *تعميم إداري:*\n\n${escapeMarkdown(text)}`, {
           parse_mode: 'Markdown',
         });
         sentCount++;

@@ -7,6 +7,7 @@ export interface Env {
   BOT_TOKEN: string;
   TIMEZONE?: string; // e.g. 'Africa/Cairo', 'Asia/Riyadh'
   API_KEY?: string;
+  INITIAL_ADMIN_ID?: string;
 }
 
 export interface Employee {

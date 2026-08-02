@@ -3,14 +3,33 @@
 // ============================================================
 import { Env } from '../types';
 
+const apiRateLimit = new Map<string, { count: number; timestamp: number }>();
+
 export async function handleApiRoutes(
   request: Request,
   env: Env
 ): Promise<Response | null> {
   const url = new URL(request.url);
 
-  // Secure API routes
   if (url.pathname.startsWith('/api/')) {
+    // ── Rate Limiting (In-Memory) ──
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+    const now = Date.now();
+    const record = apiRateLimit.get(ip) || { count: 0, timestamp: now };
+    
+    if (now - record.timestamp > 60000) {
+      record.count = 0;
+      record.timestamp = now;
+    }
+    
+    if (record.count >= 20) { // Max 20 requests per minute per IP
+      return new Response('Rate limit exceeded', { status: 429 });
+    }
+    
+    record.count++;
+    apiRateLimit.set(ip, record);
+
+    // Secure API routes
     const apiKeyHeader = request.headers.get('X-API-KEY');
     const apiKeyQuery = url.searchParams.get('api_key');
     const providedKey = apiKeyHeader || apiKeyQuery;
@@ -48,6 +67,12 @@ export async function handleApiRoutes(
     return new Response(JSON.stringify(result.results), {
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // ── GET /api/export/employees ──────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/export/employees') {
+    const { exportEmployeesExcel } = await import('./export');
+    return await exportEmployeesExcel(env);
   }
 
   // ── GET /api/debug ─────────────────────────────────────

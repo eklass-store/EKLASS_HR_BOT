@@ -12,6 +12,7 @@ import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../../../db/loans.d
 import { getSettings } from '../../../db/settings.db';
 import { getAdminMenu } from '../../../keyboards/main.keyboards';
 import { getCurrentMonth } from '../../../utils/time';
+import { escapeMarkdown } from '../../../utils/markdown';
 
 export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
 
@@ -81,7 +82,7 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
         );
       } catch (_) {}
 
-      summary += `• ${employee.full_name}: ${netSalary.toFixed(2)} ريال\n`;
+      summary += `• ${escapeMarkdown(employee.full_name)}: ${netSalary.toFixed(2)} ريال\n`;
       issuedCount++;
     }
 

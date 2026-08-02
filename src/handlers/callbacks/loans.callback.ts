@@ -12,6 +12,7 @@ import {
 } from '../../db/loans.db';
 import { setState } from '../../db/state.db';
 import { getMainMenu } from '../../keyboards/main.keyboards';
+import { escapeMarkdown } from '../../utils/markdown';
 
 export function registerLoanCallbacks(bot: Bot, env: Env): void {
 
@@ -66,7 +67,7 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
     const employee = await getEmployeeById(env, loan.employee_id);
     if (employee) {
       const notif = isApprove
-        ? `✅ *تمت الموافقة على سلفتك*\nالمبلغ: *${loan.amount}* ريال\nالسبب: ${loan.reason}`
+        ? `✅ *تمت الموافقة على سلفتك*\nالمبلغ: *${loan.amount}* ريال\nالسبب: ${escapeMarkdown(loan.reason)}`
         : `❌ *تم رفض طلب سلفتك*\nالمبلغ: ${loan.amount} ريال\nيرجى التواصل مع الإدارة.`;
       try {
         await bot.api.sendMessage(employee.telegram_id, notif, { parse_mode: 'Markdown' });
@@ -74,7 +75,7 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
     }
 
     await ctx.editMessageText(
-      `${isApprove ? '✅ موافقة' : '❌ رفض'} سلفة *${employee?.full_name ?? 'الموظف'}*\nالمبلغ: ${loan.amount} ريال`,
+      `${isApprove ? '✅ موافقة' : '❌ رفض'} سلفة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\nالمبلغ: ${loan.amount} ريال`,
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

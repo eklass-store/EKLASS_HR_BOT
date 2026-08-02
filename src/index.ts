@@ -31,6 +31,8 @@ import { registerMessageHandler } from './handlers/messages.handler';
 
 export { Env };
 
+let botInstance: Bot | null = null;
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     if (!env.BOT_TOKEN) {
@@ -47,35 +49,35 @@ export default {
     }
 
     // ── 3. Telegram Webhook (POST) ─────────────────────────────
-    const bot = new Bot(env.BOT_TOKEN);
+    if (!botInstance) {
+      botInstance = new Bot(env.BOT_TOKEN);
 
-    // Register all handlers
-    registerStartCommand(bot, env);
-    registerHelpCommand(bot, env);
-    registerBroadcastCommand(bot, env);
+      // Register all handlers
+      registerStartCommand(botInstance, env);
+      registerHelpCommand(botInstance, env);
+      registerBroadcastCommand(botInstance, env);
 
-    registerAttendanceCallbacks(bot, env);
-    registerLeaveCallbacks(bot, env);
-    registerLoanCallbacks(bot, env);
-    registerSalaryCallbacks(bot, env);
+      registerAttendanceCallbacks(botInstance, env);
+      registerLeaveCallbacks(botInstance, env);
+      registerLoanCallbacks(botInstance, env);
+      registerSalaryCallbacks(botInstance, env);
 
-    registerAdminPanelCallbacks(bot, env);
-    registerAdminEmployeeCallbacks(bot, env);
-    registerAdminPayrollCallbacks(bot, env);
-    registerAdminReportCallbacks(bot, env);
-    registerAdminSettingsCallbacks(bot, env);
+      registerAdminPanelCallbacks(botInstance, env);
+      registerAdminEmployeeCallbacks(botInstance, env);
+      registerAdminPayrollCallbacks(botInstance, env);
+      registerAdminReportCallbacks(botInstance, env);
+      registerAdminSettingsCallbacks(botInstance, env);
 
-    // IMPORTANT: Message handler يجب أن يكون أخيراً
-    // حتى لا يتعارض مع الأوامر (/start, /help, etc.)
-    registerMessageHandler(bot, env);
+      registerMessageHandler(botInstance, env);
 
-    // Catch errors gracefully so we don't crash and block Telegram's queue
-    bot.catch((err) => {
-      console.error('[Bot Error]', err);
-    });
+      // Catch errors gracefully
+      botInstance.catch((err) => {
+        console.error('[Bot Error]', err);
+      });
+    }
 
     try {
-      const cb = webhookCallback(bot, 'cloudflare-mod');
+      const cb = webhookCallback(botInstance, 'cloudflare-mod');
       return await cb(request, env, _ctx);
     } catch (err) {
       console.error('[Webhook Error]', err);

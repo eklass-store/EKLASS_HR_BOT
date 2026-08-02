@@ -14,6 +14,7 @@ import {
 } from '../../db/leaves.db';
 import { setState } from '../../db/state.db';
 import { getMainMenu } from '../../keyboards/main.keyboards';
+import { escapeMarkdown } from '../../utils/markdown';
 import {
   getLeaveTypeKeyboard,
   getLeaveApprovalKeyboard,
@@ -69,7 +70,7 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
     const balance = await getLeaveBalance(env, emp.id);
     const icons: Record<string, string> = { pending: '⏳', approved: '✅', rejected: '❌' };
 
-    let text = `🏷️ *إجازاتي*\n\n📊 هذا العام: ${balance.approved} مُوافق | ${balance.pending} معلّق\n\n`;
+    let text = `🏷️ *إجازاتي*\n\n📊 الحصة السنوية: ${balance.quota} يوم\nالمُستخدَم: ${balance.approved} يوم | معلّق: ${balance.pending} يوم\nالمتبقي: ${balance.quota - balance.approved} يوم\n\n`;
 
     if (leaves.length === 0) {
       text += 'لا توجد طلبات إجازة مسجلة.';
@@ -117,7 +118,7 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
     }
 
     await ctx.editMessageText(
-      `${isApprove ? '✅ تمت الموافقة' : '❌ تم الرفض'} على إجازة *${employee?.full_name ?? 'الموظف'}*\n📅 ${leave.start_date} ← ${leave.end_date}`,
+      `${isApprove ? '✅ تمت الموافقة' : '❌ تم الرفض'} على إجازة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\n📅 ${leave.start_date} ← ${leave.end_date}`,
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

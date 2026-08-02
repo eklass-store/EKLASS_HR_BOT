@@ -1,7 +1,16 @@
 // ============================================================
 // src/keyboards/main.keyboards.ts — Main & Admin Menus
 // ============================================================
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, Keyboard } from 'grammy';
+
+/** القائمة الدائمة أسفل الشاشة (Reply Keyboard) */
+export function getPersistentMenu(): Keyboard {
+  return new Keyboard()
+    .text('🎛️ القائمة الرئيسية')
+    .text('🆔 معرفي (Telegram ID)').row()
+    .text('❓ مساعدة')
+    .resized(); // يجعل حجم الأزرار أصغر ومناسباً
+}
 
 /** القائمة الرئيسية للموظف */
 export function getMainMenu(isAdmin: boolean): InlineKeyboard {

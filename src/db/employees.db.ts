@@ -54,3 +54,9 @@ export async function softDeleteEmployee(env: Env, id: number): Promise<void> {
     "UPDATE Employees SET is_active = 0 WHERE id = ?"
   ).bind(id).run();
 }
+
+export async function updateEmployeeRole(env: Env, id: number, role: 'admin' | 'employee'): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE Employees SET role = ? WHERE id = ?"
+  ).bind(role, id).run();
+}

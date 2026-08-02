@@ -8,6 +8,7 @@ import { getEmployeeByTelegramId } from '../../../db/employees.db';
 import { getDailyReport } from '../../../db/attendance.db';
 import { getAdminMenu } from '../../../keyboards/main.keyboards';
 import { getNow } from '../../../utils/time';
+import { escapeMarkdown } from '../../../utils/markdown';
 
 export function registerAdminReportCallbacks(bot: Bot, env: Env): void {
 
@@ -36,10 +37,10 @@ export function registerAdminReportCallbacks(bot: Bot, env: Env): void {
         const late = rec.late_minutes > 0 ? ` ⚠️(${rec.late_minutes}د)` : '';
         if (rec.late_minutes > 0) lateCount++;
         const co = rec.check_out_time ? ` → ${rec.check_out_time}` : '';
-        presentLines += `✅ ${rec.full_name}: ${rec.check_in_time}${co}${late}\n`;
+        presentLines += `✅ ${escapeMarkdown(rec.full_name)}: ${rec.check_in_time}${co}${late}\n`;
       } else {
         absent++;
-        absentLines += `❌ ${rec.full_name}\n`;
+        absentLines += `❌ ${escapeMarkdown(rec.full_name)}\n`;
       }
     }
 

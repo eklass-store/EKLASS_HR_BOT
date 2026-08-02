@@ -21,8 +21,9 @@ import { getAdmins } from '../db/employees.db';
 import { getMainMenu, getAdminMenu, getEmployeeManagementMenu } from '../keyboards/main.keyboards';
 import { getLeaveApprovalKeyboard, LEAVE_TYPE_NAMES } from '../keyboards/leave.keyboards';
 import { getLoanApprovalKeyboard } from '../keyboards/loan.keyboards';
-import { isValidDate, isValidTime } from '../utils/time';
+import { isValidDate, isValidTime, getNow } from '../utils/time';
 import { escapeMarkdown } from '../utils/markdown';
+import { logAction } from '../db/audit.db';
 
 const SETTING_NAMES: Record<string, string> = {
   work_start_time:           'وقت بداية الدوام',
@@ -38,6 +39,23 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
     // تجاهل الأوامر — تعالجها handlers خاصة بها
     if (text.startsWith('/')) return;
 
+    // ── أزرار القائمة الدائمة (Reply Keyboard) ──
+    if (text === '🎛️ القائمة الرئيسية') {
+      await clearState(env, tid); // إلغاء أي عملية جارية
+      const employee = await getEmployeeByTelegramId(env, tid);
+      if (!employee) return ctx.reply('أنت غير مسجل في النظام.');
+      return ctx.reply('اختر ما تريد من القائمة:', { reply_markup: getMainMenu(employee.role === 'admin') });
+    }
+
+    if (text === '🆔 معرفي (Telegram ID)') {
+      return ctx.reply(`معرفك (Telegram ID) الخاص بك هو:\n\`${tid}\``, { parse_mode: 'Markdown' });
+    }
+
+    if (text === '❓ مساعدة') {
+      await clearState(env, tid);
+      return ctx.reply('هذا البوت مخصص لإدارة الموارد البشرية.\nاستخدم القائمة الرئيسية للوصول إلى كافة الخدمات.\n\nإذا واجهت أي مشكلة، يرجى التواصل مع الإدارة.');
+    }
+
     const stateRecord = await getState(env, tid);
     if (!stateRecord) return; // لا توجد محادثة نشطة
 
@@ -52,6 +70,12 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       if (!isValidDate(text)) {
         return ctx.reply('⚠️ صيغة التاريخ غير صحيحة.\nاستخدم: YYYY-MM-DD\nمثال: 2024-08-15');
       }
+      
+      const today = getNow(env.TIMEZONE).date;
+      if (text < today) {
+        return ctx.reply(`⚠️ لا يمكنك طلب إجازة لتاريخ يسبق اليوم (${today}).`);
+      }
+
       await setState(env, tid, 'awaiting_leave_end_date', { ...data, startDate: text });
       return ctx.reply(
         `✅ تاريخ البداية: *${text}*\n\n📅 أرسل الآن تاريخ *نهاية* الإجازة:`,
@@ -119,6 +143,18 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       if (isNaN(amount) || amount <= 0) {
         return ctx.reply('⚠️ يرجى إرسال مبلغ صحيح بالأرقام فقط.\nمثال: 500');
       }
+
+      if (!emp) { await clearState(env, tid); return; }
+
+      const { getSettings } = await import('../db/settings.db');
+      const settings = await getSettings(env);
+      const maxPercentage = parseFloat(settings['max_loan_percentage'] ?? '50');
+      const maxAmount = emp.base_salary * (maxPercentage / 100);
+
+      if (amount > maxAmount) {
+        return ctx.reply(`⚠️ عذراً، الحد الأقصى للسلفة هو ${maxPercentage}% من راتبك الأساسي.\nالحد الأقصى لك: *${maxAmount}* ريال.`, { parse_mode: 'Markdown' });
+      }
+
       await setState(env, tid, 'awaiting_loan_reason', { ...data, amount });
       return ctx.reply(
         `✅ المبلغ: *${amount}* ريال\n\n📝 أرسل *سبب* طلب السلفة:`,
@@ -206,6 +242,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       const fullName   = data['fullName']   as string;
 
       await addEmployee(env, telegramId, fullName, salary);
+      await logAction(env, emp.id, 'ADD_EMPLOYEE', `تم إضافة الموظف ${fullName} (TID: ${telegramId}) براتب ${salary}`);
       await clearState(env, tid);
 
       return ctx.reply(
@@ -231,6 +268,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await env.DB.prepare('UPDATE Employees SET base_salary = ? WHERE id = ?')
         .bind(salary, empId).run();
+      await logAction(env, emp.id, 'UPDATE_SALARY', `تم تعديل راتب الموظف ID ${empId} (${employee?.full_name}) إلى ${salary}`);
       await clearState(env, tid);
 
       return ctx.reply(
