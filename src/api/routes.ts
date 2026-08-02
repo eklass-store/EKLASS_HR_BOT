@@ -39,5 +39,24 @@ export async function handleApiRoutes(
     });
   }
 
+  // ── GET /api/debug ─────────────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/debug') {
+    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`);
+    const data = await res.json();
+    return new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // ── GET /api/set-webhook ─────────────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/set-webhook') {
+    const webhookUrl = `https://${url.host}`;
+    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`);
+    const data = await res.json();
+    return new Response(JSON.stringify({ setting: webhookUrl, ...data }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   return null; // لا يوجد route مطابق — أكمل لمعالجة الـ webhook
 }

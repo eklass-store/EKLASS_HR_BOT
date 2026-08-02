@@ -2,7 +2,7 @@
 // src/index.ts — Cloudflare Worker Entry Point (v2 Refactored)
 // الملف الرئيسي: يربط كل الـ handlers معاً فقط — لا منطق هنا
 // ============================================================
-import { Bot } from 'grammy';
+import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
 
 // API
@@ -69,14 +69,18 @@ export default {
     // حتى لا يتعارض مع الأوامر (/start, /help, etc.)
     registerMessageHandler(bot, env);
 
+    // Catch errors gracefully so we don't crash and block Telegram's queue
+    bot.catch((err) => {
+      console.error('[Bot Error]', err);
+    });
+
     try {
-      const payload = await request.json();
-      await bot.init();
-      await bot.handleUpdate(payload as any);
-      return new Response('OK');
+      const cb = webhookCallback(bot, 'cloudflare-mod');
+      return await cb(request);
     } catch (err) {
-      console.error('[HR Bot Error]', err);
-      return new Response('Internal Error', { status: 500 });
+      console.error('[Webhook Error]', err);
+      // Return 200 anyway so Telegram drops the poison pill update
+      return new Response('OK', { status: 200 });
     }
   },
 };
