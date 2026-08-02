@@ -76,7 +76,7 @@ export default {
 
     try {
       const cb = webhookCallback(bot, 'cloudflare-mod');
-      return await cb(request);
+      return await cb(request, env, _ctx);
     } catch (err) {
       console.error('[Webhook Error]', err);
       // Return 200 anyway so Telegram drops the poison pill update
