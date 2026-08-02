@@ -31,8 +31,6 @@ import { registerMessageHandler } from './handlers/messages.handler';
 
 export { Env };
 
-let botInstance: Bot | null = null;
-
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     if (!env.BOT_TOKEN) {
@@ -49,36 +47,64 @@ export default {
     }
 
     // ── 3. Telegram Webhook (POST) ─────────────────────────────
-    if (!botInstance) {
-      botInstance = new Bot(env.BOT_TOKEN);
+    const bot = new Bot(env.BOT_TOKEN);
 
-      // Register all handlers
-      registerStartCommand(botInstance, env);
-      registerHelpCommand(botInstance, env);
-      registerBroadcastCommand(botInstance, env);
+    // Rate Limiting Middleware
+    bot.use(async (ctx, next) => {
+      const tid = String(ctx.from?.id);
+      if (!tid || tid === 'undefined') return next();
 
-      registerAttendanceCallbacks(botInstance, env);
-      registerLeaveCallbacks(botInstance, env);
-      registerLoanCallbacks(botInstance, env);
-      registerSalaryCallbacks(botInstance, env);
+      const now = Date.now();
+      const WINDOW_MS = 2000; // 2 seconds
+      const MAX_REQUESTS = 4;
 
-      registerAdminPanelCallbacks(botInstance, env);
-      registerAdminEmployeeCallbacks(botInstance, env);
-      registerAdminPayrollCallbacks(botInstance, env);
-      registerAdminReportCallbacks(botInstance, env);
-      registerAdminSettingsCallbacks(botInstance, env);
+      try {
+        const record = await env.DB.prepare("SELECT last_request_time, request_count FROM RateLimits WHERE telegram_id = ?").bind(tid).first() as any;
+        if (!record) {
+          await env.DB.prepare("INSERT INTO RateLimits (telegram_id, last_request_time, request_count) VALUES (?, ?, 1)").bind(tid, now).run();
+        } else {
+          if (now - record.last_request_time < WINDOW_MS) {
+            if (record.request_count >= MAX_REQUESTS) {
+              return; // Drop request silently
+            } else {
+              await env.DB.prepare("UPDATE RateLimits SET request_count = request_count + 1 WHERE telegram_id = ?").bind(tid).run();
+            }
+          } else {
+            await env.DB.prepare("UPDATE RateLimits SET last_request_time = ?, request_count = 1 WHERE telegram_id = ?").bind(now, tid).run();
+          }
+        }
+      } catch (err) {
+        // ignore db errors to not block flow
+      }
+      return next();
+    });
 
-      registerMessageHandler(botInstance, env);
+    // Register all handlers
+    registerStartCommand(bot, env);
+    registerHelpCommand(bot, env);
+    registerBroadcastCommand(bot, env);
 
-      // Catch errors gracefully
-      botInstance.catch((err) => {
-        console.error('[Bot Error]', err);
-      });
-    }
+    registerAttendanceCallbacks(bot, env);
+    registerLeaveCallbacks(bot, env);
+    registerLoanCallbacks(bot, env);
+    registerSalaryCallbacks(bot, env);
+
+    registerAdminPanelCallbacks(bot, env);
+    registerAdminEmployeeCallbacks(bot, env);
+    registerAdminPayrollCallbacks(bot, env);
+    registerAdminReportCallbacks(bot, env);
+    registerAdminSettingsCallbacks(bot, env);
+
+    registerMessageHandler(bot, env);
+
+    // Catch errors gracefully
+    bot.catch((err) => {
+      console.error('[Bot Error]', err);
+    });
 
     try {
-      const cb = webhookCallback(botInstance, 'cloudflare-mod');
-      return await cb(request, env, _ctx);
+      const cb = webhookCallback(bot, 'cloudflare-mod');
+      return await cb(request);
     } catch (err) {
       console.error('[Webhook Error]', err);
       // Return 200 anyway so Telegram drops the poison pill update

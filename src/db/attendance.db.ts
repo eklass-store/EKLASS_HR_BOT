@@ -21,7 +21,7 @@ export async function createAttendance(
   env: Env,
   employeeId: number,
   date: string,
-  checkInTime: string,
+  checkInTime: string | null,
   lateMinutes: number
 ): Promise<void> {
   await env.DB.prepare(

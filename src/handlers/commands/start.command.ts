@@ -6,10 +6,12 @@ import { Env } from '../../types';
 import { getEmployeeByTelegramId, getAdmins, addEmployee } from '../../db/employees.db';
 import { escapeMarkdown } from '../../utils/markdown';
 import { getMainMenu, getPersistentMenu } from '../../keyboards/main.keyboards';
+import { clearState } from '../../db/state.db';
 
 export function registerStartCommand(bot: Bot, env: Env): void {
   bot.command('start', async (ctx) => {
     const tid = String(ctx.from?.id);
+    await clearState(env, tid);
     const emp = await getEmployeeByTelegramId(env, tid);
 
     if (!emp) {

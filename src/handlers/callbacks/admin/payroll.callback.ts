@@ -11,6 +11,7 @@ import { getTotalLateMinutes } from '../../../db/attendance.db';
 import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../../../db/loans.db';
 import { getSettings } from '../../../db/settings.db';
 import { getAdminMenu } from '../../../keyboards/main.keyboards';
+import { logAction } from '../../../db/audit.db';
 import { getCurrentMonth, getDaysInMonth, calcLateMinutes } from '../../../utils/time';
 import { escapeMarkdown } from '../../../utils/markdown';
 
@@ -64,24 +65,36 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
         continue;
       }
 
-      // الحساب الديناميكي للراتب
+      // الحساب بناء على الراتب الأساسي الثابت
       const baseSalary = employee.base_salary;
-      const dailyRate = baseSalary / 30; // بناء على شهر 30 يوم قياسي
-      const dynamicMonthSalary = dailyRate * daysInMonth; // 28, 30, or 31 days
-      const minuteRate = dailyRate / workMinutes; // أجر الدقيقة
+      const dailyRate = baseSalary / 30; // بناء على شهر 30 يوم قياسي لحساب الخصومات
+      const minuteRate = dailyRate / workMinutes; // أجر الدقيقة للخصم
 
       const lateMinutes   = await getTotalLateMinutes(env, employee.id, month);
       const lateDeduction = lateMinutes * minuteRate;
-      const activeLoan    = await getTotalActiveLoan(env, employee.id);
+      const originalLoan  = await getTotalActiveLoan(env, employee.id);
       
-      const totalDed      = lateDeduction + activeLoan;
-      const netSalary     = Math.max(0, dynamicMonthSalary - totalDed);
+      let activeLoan = originalLoan;
+      let netSalary = baseSalary - lateDeduction - activeLoan;
+      let remainingLoan = 0;
 
-      await issuePayroll(env, employee.id, month, dynamicMonthSalary, totalDed, netSalary);
+      if (netSalary < 0) {
+        // إذا كان الصافي بالسالب، نخصم السلفة بمقدار الراتب المتاح فقط
+        const maxLoanDeduction = Math.max(0, baseSalary - lateDeduction);
+        activeLoan = maxLoanDeduction;
+        remainingLoan = originalLoan - activeLoan;
+        netSalary = 0;
+      }
+
+      const totalDed = lateDeduction + activeLoan;
+      await issuePayroll(env, employee.id, month, baseSalary, totalDed, netSalary);
       
-      // تحويل السلف إلى مدفوعة لكي لا تخصم مرة أخرى
-      if (activeLoan > 0) {
+      if (originalLoan > 0) {
         await markEmployeeLoansAsPaid(env, employee.id);
+        // ترحيل السلفة المتبقية إن وجدت كعنصر جديد معتمد
+        if (remainingLoan > 0) {
+          await env.DB.prepare("INSERT INTO Loans (employee_id, amount, reason, status) VALUES (?, ?, 'باقي سلفة سابقة مرحلة', 'approved')").bind(employee.id, remainingLoan).run();
+        }
       }
 
       // إشعار الموظف براتبه
@@ -89,7 +102,7 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
         await bot.api.sendMessage(
           employee.telegram_id,
           `💰 *تم إصدار راتبك — ${month}*\n\n` +
-          `📌 الأساسي المستحق (${daysInMonth} يوم): ${dynamicMonthSalary.toFixed(2)} جنيه\n` +
+          `📌 الأساسي المستحق: ${baseSalary.toFixed(2)} جنيه\n` +
           (totalDed > 0 ? `➖ الخصومات: ${totalDed.toFixed(2)} جنيه\n` : '') +
           `\n💵 *الصافي: ${netSalary.toFixed(2)} جنيه*`,
           { parse_mode: 'Markdown' }
@@ -109,6 +122,8 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
       `تخطّى (مُصدر مسبقاً): ${skippedCount}\n` +
       (summary ? `\n📋 *التفاصيل:*\n` : '');
 
+    await logAction(env, admin.id, 'ISSUE_PAYROLL', `تم إصدار رواتب شهر ${month} لـ ${issuedCount} موظفين`);
+
     await ctx.editMessageText(headerMsg, {
       parse_mode: 'Markdown',
       reply_markup: summary ? undefined : getAdminMenu(),
@@ -120,13 +135,39 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
       for (let i = 0; i < summary.length; i += chunkSize) {
         const chunk = summary.substring(i, i + chunkSize);
         const isLast = (i + chunkSize >= summary.length);
+        
+        const undoKb = isLast ? new InlineKeyboard().text('🔄 تراجع عن إصدار الرواتب', `admin_payroll_undo_${month}`).row().text('🔙 رجوع', 'admin_panel') : undefined;
+
         await bot.api.sendMessage(tid, chunk, {
           parse_mode: 'Markdown',
-          reply_markup: isLast ? getAdminMenu() : undefined
+          reply_markup: undoKb
         });
       }
+    } else {
+      await ctx.editMessageText(headerMsg, {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text('🔄 تراجع عن إصدار الرواتب', `admin_payroll_undo_${month}`).row().text('🔙 رجوع', 'admin_panel'),
+      });
     }
     
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── تراجع عن إصدار رواتب الشهر ─────────────────────────────
+  bot.callbackQuery(/^admin_payroll_undo_\d{4}-\d{2}$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const admin = await getEmployeeByTelegramId(env, tid);
+    if (!admin || admin.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+
+    const month = ctx.callbackQuery.data.replace('admin_payroll_undo_', '');
+    
+    await env.DB.prepare("DELETE FROM Payroll WHERE month = ?").bind(month).run();
+    await logAction(env, admin.id, 'UNDO_PAYROLL', `تم إلغاء إصدار رواتب شهر ${month}`);
+
+    await ctx.editMessageText(`✅ تم التراجع عن إصدار رواتب شهر ${month} بنجاح.`, {
+      parse_mode: 'Markdown',
+      reply_markup: getAdminMenu(),
+    });
     await ctx.answerCallbackQuery();
   });
 }

@@ -9,6 +9,7 @@ import { getDailyReport } from '../../../db/attendance.db';
 import { getAdminMenu } from '../../../keyboards/main.keyboards';
 import { getNow } from '../../../utils/time';
 import { escapeMarkdown } from '../../../utils/markdown';
+import { getRecentAuditLogs } from '../../../db/audit.db';
 
 export function registerAdminReportCallbacks(bot: Bot, env: Env): void {
 
@@ -48,6 +49,37 @@ export function registerAdminReportCallbacks(bot: Bot, env: Env): void {
     if (presentLines) text += `*الحاضرون:*\n${presentLines}\n`;
     if (absentLines)  text += `*الغائبون:*\n${absentLines}\n`;
     text += `📊 *الإجمالي:* ${present} حاضر | ${absent} غائب | ${lateCount} متأخر`;
+
+    await ctx.editMessageText(text, {
+      parse_mode: 'Markdown',
+      reply_markup: getAdminMenu(),
+    });
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery('admin_audit_logs', async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp || emp.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+
+    const logs = await getRecentAuditLogs(env, 15);
+
+    if (logs.length === 0) {
+      await ctx.editMessageText('📭 لا توجد أحداث مسجلة بعد.', {
+        reply_markup: getAdminMenu(),
+      });
+      return ctx.answerCallbackQuery();
+    }
+
+    let text = `🔍 *سجل التدقيق (آخر الإجراءات)*\n\n`;
+    for (const log of logs) {
+      const adminName = log.admin_name || 'غير معروف';
+      text += `👤 *${escapeMarkdown(adminName)}*\n`;
+      text += `⚙️ إجراء: \`${log.action}\`\n`;
+      text += `📝 تفاصيل: ${escapeMarkdown(log.details)}\n`;
+      text += `🕒 ${log.created_at}\n`;
+      text += `───────────\n`;
+    }
 
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',

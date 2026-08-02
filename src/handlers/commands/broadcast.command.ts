@@ -30,6 +30,7 @@ export function registerBroadcastCommand(bot: Bot, env: Env): void {
     const employees = await getAllEmployees(env);
     let sentCount = 0;
     for (const emp of employees) {
+      if (emp.telegram_id === admin.telegram_id) continue;
       try {
         await bot.api.sendMessage(emp.telegram_id, `📢 *تعميم إداري:*\n\n${escapeMarkdown(text)}`, {
           parse_mode: 'Markdown',

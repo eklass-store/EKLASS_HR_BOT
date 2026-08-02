@@ -73,3 +73,11 @@ export async function hasPendingLeave(env: Env, employeeId: number): Promise<boo
   ).bind(employeeId).first();
   return !!result;
 }
+
+/** هل تتداخل التواريخ مع إجازة أخرى معتمدة أو معلقة؟ */
+export async function hasOverlappingLeave(env: Env, employeeId: number, startDate: string, endDate: string): Promise<boolean> {
+  const result = await env.DB.prepare(
+    "SELECT id FROM Leaves WHERE employee_id = ? AND status IN ('approved', 'pending') AND (start_date <= ? AND end_date >= ?) LIMIT 1"
+  ).bind(employeeId, endDate, startDate).first();
+  return !!result;
+}

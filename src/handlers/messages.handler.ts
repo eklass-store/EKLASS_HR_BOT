@@ -8,7 +8,7 @@
 //   - تعديل إعدادات الدوام
 //   - إرسال تعميم
 // ============================================================
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import { Env } from '../types';
 import { getEmployeeByTelegramId, addEmployee } from '../db/employees.db';
 import { getState, setState, clearState, parseStateData } from '../db/state.db';
@@ -47,7 +47,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       return ctx.reply('اختر ما تريد من القائمة:', { reply_markup: getMainMenu(employee.role === 'admin') });
     }
 
-    if (text === '🆔 معرفي (Telegram ID)') {
+    if (text === '🆔 معرف تليجرام') {
       return ctx.reply(`معرفك (Telegram ID) الخاص بك هو:\n\`${tid}\``, { parse_mode: 'Markdown' });
     }
 
@@ -78,8 +78,8 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await setState(env, tid, 'awaiting_leave_end_date', { ...data, startDate: text });
       return ctx.reply(
-        `✅ تاريخ البداية: *${text}*\n\n📅 أرسل الآن تاريخ *نهاية* الإجازة:`,
-        { parse_mode: 'Markdown' }
+        `✅ تاريخ البداية: *${text}*\n\n*الخطوة 2/3*\n📅 أرسل تاريخ *نهاية* الإجازة:`,
+        { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
       );
     }
 
@@ -96,8 +96,8 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       }
       await setState(env, tid, 'awaiting_leave_reason', { ...data, endDate: text });
       return ctx.reply(
-        `✅ من *${startDate}* إلى *${text}*\n\n📝 أرسل سبب الإجازة (أو أرسل \`—\` للتخطي):`,
-        { parse_mode: 'Markdown' }
+        `✅ من *${startDate}* إلى *${text}*\n\n*الخطوة 3/3*\n📝 أرسل سبب الإجازة (أو أرسل \`—\` للتخطي):`,
+        { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
       );
     }
 
@@ -112,17 +112,26 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       const endDate   = data['endDate']   as string;
       const type      = data['type']      as string;
 
-      const { getLeaveBalance } = await import('../db/leaves.db');
+      const { getLeaveBalance, hasOverlappingLeave } = await import('../db/leaves.db');
+      
+      if (await hasOverlappingLeave(env, emp.id, startDate, endDate)) {
+        await clearState(env, tid);
+        return ctx.reply(
+          `⚠️ عذراً، التواريخ المطلوبة تتقاطع مع إجازة أخرى لك (معتمدة أو قيد الانتظار).`,
+          { reply_markup: getMainMenu(emp.role === 'admin') }
+        );
+      }
+
       const balance = await getLeaveBalance(env, emp.id);
       
       const startD = new Date(startDate);
       const endD = new Date(endDate);
       const requestedDays = Math.floor((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       
-      if (balance.approved + requestedDays > balance.quota) {
+      if (balance.approved + balance.pending + requestedDays > balance.quota) {
         await clearState(env, tid);
         return ctx.reply(
-          `⚠️ عذراً، لا يمكنك طلب إجازة لمدة ${requestedDays} يوم.\nرصيدك المتبقي هو ${balance.quota - balance.approved} يوم فقط.`,
+          `⚠️ عذراً، لا يمكنك طلب إجازة لمدة ${requestedDays} يوم.\nرصيدك المتبقي (شاملاً الطلبات المعلقة) هو ${Math.max(0, balance.quota - balance.approved - balance.pending)} يوم فقط.`,
           { reply_markup: getMainMenu(emp.role === 'admin') }
         );
       }
@@ -166,14 +175,15 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       const maxPercentage = parseFloat(settings['max_loan_percentage'] ?? '50');
       const maxAmount = emp.base_salary * (maxPercentage / 100);
 
-      if (amount > maxAmount) {
-        return ctx.reply(`⚠️ عذراً، الحد الأقصى للسلفة هو ${maxPercentage}% من راتبك الأساسي.\nالحد الأقصى لك: *${maxAmount}* جنيه.`, { parse_mode: 'Markdown' });
+      const activeLoan = (data['activeLoan'] as number) || 0;
+      if ((amount + activeLoan) > maxAmount) {
+        return ctx.reply(`⚠️ عذراً، إجمالي سلفك تخطى ${maxPercentage}% من راتبك الأساسي.\nالحد الأقصى لك: *${maxAmount.toFixed(2)}* جنيه.\nرصيد سلفك النشطة حالياً: *${activeLoan.toFixed(2)}* جنيه.`, { parse_mode: 'Markdown' });
       }
 
       await setState(env, tid, 'awaiting_loan_reason', { ...data, amount });
       return ctx.reply(
-        `✅ المبلغ: *${amount}* جنيه\n\n📝 أرسل *سبب* طلب السلفة:`,
-        { parse_mode: 'Markdown' }
+        `✅ المبلغ: *${amount.toFixed(2)}* جنيه\n\n*الخطوة 2/2*\n📝 أرسل *سبب* طلب السلفة:`,
+        { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
       );
     }
 
@@ -193,7 +203,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         try {
           await bot.api.sendMessage(
             admin.telegram_id,
-            `💸 *طلب سلفة جديد*\n\nالموظف: ${escapeMarkdown(emp.full_name)}\nالمبلغ: ${amount} جنيه\nالسبب: ${escapeMarkdown(text)}`,
+            `💸 *طلب سلفة جديد*\n\nالموظف: ${escapeMarkdown(emp.full_name)}\nالمبلغ: ${amount.toFixed(2)} جنيه\nالسبب: ${escapeMarkdown(text)}`,
             { parse_mode: 'Markdown', reply_markup: kb }
           );
         } catch (_) {}
@@ -201,7 +211,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await clearState(env, tid);
       return ctx.reply(
-        `✅ تم إرسال طلب السلفة بمبلغ *${amount}* جنيه\nبانتظار موافقة الإدارة ⏳`,
+        `✅ تم إرسال طلب السلفة بمبلغ *${amount.toFixed(2)}* جنيه\nبانتظار موافقة الإدارة ⏳`,
         { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
       );
     }
@@ -225,7 +235,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       await setState(env, tid, 'admin_awaiting_emp_name', { telegramId: text });
       return ctx.reply(
         `✅ Telegram ID: \`${text}\`\n\n*الخطوة 2/4* — أرسل الاسم الكامل للموظف:`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
       );
     }
 
@@ -237,8 +247,8 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await setState(env, tid, 'admin_awaiting_emp_department', { ...data, fullName: text });
       return ctx.reply(
-        `✅ الاسم: *${text}*\n\n*الخطوة 3/4* — أرسل المسمى الوظيفي (القسم):\nمثال: محاسب، كاشير، مهندس`,
-        { parse_mode: 'Markdown' }
+        `✅ الاسم: *${escapeMarkdown(text)}*\n\n*الخطوة 3/4* — أرسل المسمى الوظيفي (القسم):\nمثال: محاسب، كاشير، مهندس`,
+        { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
       );
     }
 
@@ -250,8 +260,8 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
       await setState(env, tid, 'admin_awaiting_emp_salary', { ...data, department: text });
       return ctx.reply(
-        `✅ المسمى الوظيفي: *${text}*\n\n*الخطوة 4/4* — أرسل الراتب الأساسي (بالأرقام):`,
-        { parse_mode: 'Markdown' }
+        `✅ المسمى الوظيفي: *${escapeMarkdown(text)}*\n\n*الخطوة 4/4* — أرسل الراتب الأساسي (بالأرقام):`,
+        { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
       );
     }
 
@@ -328,10 +338,11 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       }
 
       await updateSetting(env, key, text);
+      await logAction(env, emp.id, 'UPDATE_SETTING', `تم تغيير إعداد ${SETTING_NAMES[key] ?? key} إلى ${text}`);
       await clearState(env, tid);
 
       return ctx.reply(
-        `✅ تم تحديث *"${SETTING_NAMES[key] ?? key}"* إلى: \`${text}\``,
+        `✅ تم تحديث *"${SETTING_NAMES[key] ?? key}"* إلى: \`${escapeMarkdown(text)}\``,
         { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
       );
     }
@@ -343,6 +354,7 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
 
       await createAnnouncement(env, text, emp.id);
+      await logAction(env, emp.id, 'BROADCAST', `تم إرسال تعميم: ${text.substring(0, 50)}...`);
 
       const employees = await getAllEmployees(env);
       let sentCount = 0;
@@ -365,6 +377,38 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         `✅ تم إرسال التعميم إلى *${sentCount}* موظف بنجاح.`,
         { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
       );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ⓬ [ADMIN] بحث عن موظف بالاسم
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_emp_search') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      const searchTerms = text.toLowerCase();
+      const allEmployees = await getAllEmployees(env);
+      const results = allEmployees.filter(e => e.full_name.toLowerCase().includes(searchTerms));
+
+      await clearState(env, tid);
+
+      if (results.length === 0) {
+        return ctx.reply(`📭 لا يوجد موظف يطابق: *${escapeMarkdown(text)}*`, {
+          parse_mode: 'Markdown',
+          reply_markup: getEmployeeManagementMenu()
+        });
+      }
+
+      const kb = new InlineKeyboard();
+      for (const e of results) {
+        const icon = e.role === 'admin' ? '👑' : '👤';
+        kb.text(`${icon} ${e.full_name}`, `admin_emp_view_${e.id}`).row();
+      }
+      kb.text('🔙 رجوع للإدارة', 'admin_panel');
+
+      return ctx.reply(`🔍 *نتائج البحث عن:* ${escapeMarkdown(text)}\nعدد النتائج: ${results.length}`, {
+        parse_mode: 'Markdown',
+        reply_markup: kb
+      });
     }
   });
 }

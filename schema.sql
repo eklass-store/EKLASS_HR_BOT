@@ -106,3 +106,17 @@ CREATE TABLE IF NOT EXISTS AuditLogs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(admin_id) REFERENCES Employees(id)
 );
+
+-- ── جدول Rate Limit (NEW) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS RateLimits (
+    telegram_id TEXT PRIMARY KEY,
+    last_request_time INTEGER NOT NULL,
+    request_count INTEGER DEFAULT 1
+);
+
+-- ── جدول العطلات والأيام المستثناة (NEW) ───────────────────
+CREATE TABLE IF NOT EXISTS Holidays (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    holiday_date TEXT NOT NULL UNIQUE, -- YYYY-MM-DD
+    description TEXT
+);

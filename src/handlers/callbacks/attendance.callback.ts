@@ -16,7 +16,8 @@ import {
 } from '../../db/attendance.db';
 import { getSettings } from '../../db/settings.db';
 import { getMainMenu } from '../../keyboards/main.keyboards';
-import { getNow, calcLateMinutes, getCurrentMonth } from '../../utils/time';
+import { getNow, calcLateMinutes, getCurrentMonth, isWeekend } from '../../utils/time';
+import { isHoliday } from '../../db/holidays.db';
 
 export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
@@ -31,6 +32,9 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
     // FIX BUG-01: فحص مسبق قبل الإدراج
     const existing = await getTodayAttendance(env, emp.id, date);
     if (existing) {
+      if (!existing.check_in_time) {
+        return ctx.answerCallbackQuery(`⚠️ لقد تم تسجيلك كغائب لهذا اليوم!`);
+      }
       return ctx.answerCallbackQuery(
         `⚠️ سجّلت حضورك اليوم الساعة ${existing.check_in_time}!`
       );
@@ -38,11 +42,16 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
     const settings = await getSettings(env);
     const startTime = settings['work_start_time'] ?? '09:00';
+
+    const isOffDay = isWeekend(date) || await isHoliday(env, date);
+
     // FIX BUG-03: calcLateMinutes — حساب رقمي دقيق
-    const lateMinutes = calcLateMinutes(time, startTime);
+    // لا يتم حساب تأخير في أيام الإجازات والعطل
+    const lateMinutes = isOffDay ? 0 : calcLateMinutes(time, startTime);
 
     // المنع من الحضور بعد ساعة (غياب تلقائي)
     if (lateMinutes > 60) {
+      await createAttendance(env, emp.id, date, null, 0);
       await ctx.editMessageText(
         `❌ *عفواً! لقد تجاوزت حد التأخير المسموح به (ساعة).* \n\nوقت الدوام: ${startTime}\nوقتك الحالي: ${time}\nالتأخير: ${lateMinutes} دقيقة\n\nتم تسجيلك **غياب** لهذا اليوم ولن تتمكن من تسجيل الحضور.`,
         { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
@@ -73,7 +82,7 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
     const { date, time } = getNow(env.TIMEZONE);
 
     const existing = await getTodayAttendance(env, emp.id, date);
-    if (!existing) {
+    if (!existing || !existing.check_in_time) {
       return ctx.answerCallbackQuery('⚠️ لم تسجّل حضورك اليوم بعد!');
     }
     if (existing.check_out_time) {

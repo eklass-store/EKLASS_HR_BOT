@@ -13,6 +13,7 @@ import {
 import { setState } from '../../db/state.db';
 import { getMainMenu } from '../../keyboards/main.keyboards';
 import { escapeMarkdown } from '../../utils/markdown';
+import { logAction } from '../../db/audit.db';
 
 export function registerLoanCallbacks(bot: Bot, env: Env): void {
 
@@ -32,7 +33,7 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
 
     const activeLoan = await getTotalActiveLoan(env, emp.id);
     const activeLoanMsg = activeLoan > 0
-      ? `📊 سلفتك النشطة الحالية: *${activeLoan}* جنيه\n\n`
+      ? `📊 سلفتك النشطة الحالية: *${activeLoan.toFixed(2)}* جنيه\n\n`
       : '';
 
     await setState(env, tid, 'awaiting_loan_amount', { activeLoan });
@@ -62,21 +63,22 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
 
     const newStatus = isApprove ? 'approved' : 'rejected';
     await updateLoanStatus(env, loanId, newStatus);
+    await logAction(env, admin.id, isApprove ? 'APPROVE_LOAN' : 'REJECT_LOAN', `تم ${isApprove ? 'قبول' : 'رفض'} سلفة ID ${loanId} للموظف ID ${loan.employee_id} بمبلغ ${loan.amount}`);
 
     // إشعار الموظف
     const employee = await getEmployeeById(env, loan.employee_id);
     if (employee) {
       const notif = isApprove
-        ? `✅ *تمت الموافقة على سلفتك*\nالمبلغ: *${loan.amount}* جنيه\nالسبب: ${escapeMarkdown(loan.reason)}`
-        : `❌ *تم رفض طلب سلفتك*\nالمبلغ: ${loan.amount} جنيه\nيرجى التواصل مع الإدارة.`;
+        ? `✅ *تمت الموافقة على سلفتك*\nالمبلغ: *${loan.amount.toFixed(2)}* جنيه\nالسبب: ${escapeMarkdown(loan.reason)}`
+        : `❌ *تم رفض طلب سلفتك*\nالمبلغ: ${loan.amount.toFixed(2)} جنيه\nيرجى التواصل مع الإدارة.`;
       try {
         await bot.api.sendMessage(employee.telegram_id, notif, { parse_mode: 'Markdown' });
       } catch (_) {}
     }
 
     await ctx.editMessageText(
-      `${isApprove ? '✅ موافقة' : '❌ رفض'} سلفة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\nالمبلغ: ${loan.amount} جنيه`,
-      { parse_mode: 'Markdown' }
+      `${isApprove ? '✅ موافقة' : '❌ رفض'} سلفة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\nالمبلغ: ${loan.amount.toFixed(2)} جنيه`,
+      { parse_mode: 'Markdown', reply_markup: undefined }
     );
     await ctx.answerCallbackQuery();
   });

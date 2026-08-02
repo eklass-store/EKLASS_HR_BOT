@@ -77,3 +77,13 @@ export function isValidTime(timeStr: string): boolean {
   const [h, m] = timeStr.split(':').map(Number);
   return h >= 0 && h <= 23 && m >= 0 && m <= 59;
 }
+
+/**
+ * يتحقق ما إذا كان التاريخ يوم جمعة أو سبت
+ * @param dateStr YYYY-MM-DD
+ */
+export function isWeekend(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const day = d.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
+  return day === 5 || day === 6;
+}

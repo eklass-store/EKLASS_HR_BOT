@@ -7,7 +7,7 @@ import { InlineKeyboard, Keyboard } from 'grammy';
 export function getPersistentMenu(): Keyboard {
   return new Keyboard()
     .text('🎛️ القائمة الرئيسية')
-    .text('🆔 معرفي (Telegram ID)').row()
+    .text('🆔 معرف تليجرام').row()
     .text('❓ مساعدة')
     .resized(); // يجعل حجم الأزرار أصغر ومناسباً
 }
@@ -16,7 +16,7 @@ export function getPersistentMenu(): Keyboard {
 export function getMainMenu(isAdmin: boolean): InlineKeyboard {
   const kb = new InlineKeyboard()
     .text('✅ تسجيل الحضور',  'action_checkin')
-    .text('❌ تسجيل الانصراف', 'action_checkout').row()
+    .text('🚪 تسجيل الانصراف', 'action_checkout').row()
     .text('🏖️ طلب إجازة',     'action_leave')
     .text('💸 طلب سلفة',      'action_loan').row()
     .text('📋 سجل الحضور',    'action_history')
@@ -24,7 +24,9 @@ export function getMainMenu(isAdmin: boolean): InlineKeyboard {
     .text('🏷️ إجازاتي',       'action_leaves');
 
   if (isAdmin) {
-    kb.row().text('⚙️ لوحة الإدارة', 'admin_panel');
+    kb.text('⚙️ لوحة الإدارة', 'admin_panel').row();
+  } else {
+    kb.row();
   }
   return kb;
 }
@@ -32,18 +34,20 @@ export function getMainMenu(isAdmin: boolean): InlineKeyboard {
 /** لوحة إدارة الأدمن */
 export function getAdminMenu(): InlineKeyboard {
   return new InlineKeyboard()
-    .text('👥 إدارة الموظفين',  'admin_employees').row()
-    .text('📢 إرسال تعميم',     'admin_broadcast')
-    .text('📊 إصدار الرواتب',   'admin_payroll').row()
-    .text('📈 تقرير اليوم',     'admin_report_today')
-    .text('⚙️ إعدادات الدوام', 'admin_settings').row()
-    .text('🔙 رجوع',            'back_to_main');
+    .text('👥 إدارة الموظفين',  'admin_employees')
+    .text('📢 إرسال تعميم',     'admin_broadcast').row()
+    .text('📊 إصدار الرواتب',   'admin_payroll')
+    .text('📈 تقرير اليوم',     'admin_report_today').row()
+    .text('⚙️ إعدادات الدوام', 'admin_settings')
+    .text('🔍 سجل التدقيق',    'admin_audit_logs').row()
+    .text('🔙 القائمة الرئيسية', 'back_to_main').row();
 }
 
 /** قائمة إدارة الموظفين */
 export function getEmployeeManagementMenu(): InlineKeyboard {
   return new InlineKeyboard()
-    .text('➕ إضافة موظف',    'admin_emp_add').row()
+    .text('➕ إضافة موظف',    'admin_emp_add')
     .text('📋 قائمة الموظفين', 'admin_emp_list').row()
+    .text('🔍 بحث بالاسم',     'admin_emp_search').row()
     .text('🔙 رجوع للإدارة',  'admin_panel');
 }

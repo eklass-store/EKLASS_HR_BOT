@@ -20,6 +20,7 @@ import {
   getLeaveApprovalKeyboard,
   LEAVE_TYPE_NAMES,
 } from '../../keyboards/leave.keyboards';
+import { logAction } from '../../db/audit.db';
 
 export function registerLeaveCallbacks(bot: Bot, env: Env): void {
 
@@ -72,17 +73,51 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
 
     let text = `🏷️ *إجازاتي*\n\n📊 الحصة السنوية: ${balance.quota} يوم\nالمُستخدَم: ${balance.approved} يوم | معلّق: ${balance.pending} يوم\nالمتبقي: ${balance.quota - balance.approved} يوم\n\n`;
 
+    const kb = new InlineKeyboard();
+
     if (leaves.length === 0) {
       text += 'لا توجد طلبات إجازة مسجلة.';
     } else {
       for (const l of leaves) {
         text += `${icons[l.status] ?? '❓'} ${l.start_date} ← ${l.end_date} (${LEAVE_TYPE_NAMES[l.type] ?? l.type})\n`;
+        if (l.status === 'pending') {
+          kb.text(`🗑️ سحب طلب (${l.start_date})`, `cancel_my_leave_${l.id}`).row();
+        }
       }
     }
 
+    if (emp.role === 'admin') {
+      kb.text('⚙️ لوحة الإدارة', 'admin_panel').row();
+    }
+    kb.text('🎛️ القائمة الرئيسية', 'back_to_main');
+
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',
-      reply_markup: getMainMenu(emp.role === 'admin'),
+      reply_markup: kb,
+    });
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── سحب (إلغاء) الطلب من قبل الموظف ───────────────────────
+  bot.callbackQuery(/^cancel_my_leave_\d+$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
+
+    const leaveId = parseInt(ctx.callbackQuery.data.split('_').at(-1)!);
+    const leave = await getLeaveById(env, leaveId);
+
+    if (!leave || leave.employee_id !== emp.id) {
+      return ctx.answerCallbackQuery('الطلب غير موجود أو لا تملكه!');
+    }
+    if (leave.status !== 'pending') {
+      return ctx.answerCallbackQuery('لا يمكن إلغاء الطلب لأنه تمت معالجته بالفعل.');
+    }
+
+    await env.DB.prepare("DELETE FROM Leaves WHERE id = ?").bind(leaveId).run();
+    
+    await ctx.editMessageText(`✅ تم سحب/إلغاء طلب الإجازة (${leave.start_date}) بنجاح.`, {
+      reply_markup: getMainMenu(emp.role === 'admin')
     });
     await ctx.answerCallbackQuery();
   });
@@ -105,6 +140,7 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
 
     const newStatus = isApprove ? 'approved' : 'rejected';
     await updateLeaveStatus(env, leaveId, newStatus);
+    await logAction(env, admin.id, isApprove ? 'APPROVE_LEAVE' : 'REJECT_LEAVE', `تم ${isApprove ? 'قبول' : 'رفض'} إجازة ID ${leaveId} للموظف ID ${leave.employee_id}`);
 
     // FIX BUG-07: إشعار الموظف
     const employee = await getEmployeeById(env, leave.employee_id);
@@ -119,7 +155,7 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
 
     await ctx.editMessageText(
       `${isApprove ? '✅ تمت الموافقة' : '❌ تم الرفض'} على إجازة *${escapeMarkdown(employee?.full_name ?? 'الموظف')}*\n📅 ${leave.start_date} ← ${leave.end_date}`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: undefined }
     );
     await ctx.answerCallbackQuery();
   });

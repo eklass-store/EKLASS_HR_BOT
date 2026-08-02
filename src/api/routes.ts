@@ -75,6 +75,16 @@ export async function handleApiRoutes(
     return await exportEmployeesExcel(env);
   }
 
+  // ── GET /api/export/monthly ─────────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/export/monthly') {
+    const month = url.searchParams.get('month');
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return new Response('Invalid month parameter. Format must be YYYY-MM', { status: 400 });
+    }
+    const { exportMonthlyReport } = await import('./export');
+    return await exportMonthlyReport(env, month);
+  }
+
   // ── GET /api/debug ─────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/debug') {
     const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`);
@@ -89,7 +99,7 @@ export async function handleApiRoutes(
     const webhookUrl = `https://${url.host}`;
     const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`);
     const data = await res.json();
-    return new Response(JSON.stringify({ setting: webhookUrl, ...data }), {
+    return new Response(JSON.stringify({ setting: webhookUrl, data }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
