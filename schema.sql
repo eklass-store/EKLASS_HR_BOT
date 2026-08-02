@@ -1,74 +1,96 @@
--- جدول الموظفين (البيانات الثابتة)
+-- ============================================================
+-- EKLASS HR BOT — Database Schema (v2 — Fixed & Extended)
+-- ============================================================
+
+-- ── جدول الموظفين ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Employees (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id TEXT UNIQUE NOT NULL,
-    full_name TEXT NOT NULL,
-    role TEXT DEFAULT 'employee', -- 'admin' أو 'employee'
-    base_salary REAL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT    UNIQUE NOT NULL,
+    full_name   TEXT    NOT NULL,
+    role        TEXT    DEFAULT 'employee',  -- 'admin' | 'employee'
+    base_salary REAL    DEFAULT 0,
+    department  TEXT    DEFAULT NULL,
+    is_active   INTEGER DEFAULT 1,           -- FIX: soft-delete بدل حذف فعلي
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- جدول الإعدادات العامة (مواعيد العمل وغيرها)
+-- ── جدول الإعدادات ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Settings (
-    key TEXT PRIMARY KEY,
+    key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
--- افتراضياً: يبدأ الدوام الساعة 09:00 وينتهي 17:00
-INSERT OR IGNORE INTO Settings (key, value) VALUES ('work_start_time', '09:00'), ('work_end_time', '17:00');
+-- قيم افتراضية
+INSERT OR IGNORE INTO Settings (key, value) VALUES
+    ('work_start_time',           '09:00'),
+    ('work_end_time',             '17:00'),
+    ('late_deduction_per_minute', '0');     -- NEW: ريال لكل دقيقة تأخير
 
--- جدول الحضور والانصراف (أصبح يحفظ التأخير بالدقائق ولا يمسح شهرياً بل يُؤرشف)
+-- ── جدول الحضور والانصراف ───────────────────────────────────
+-- FIX BUG-01: إضافة UNIQUE(employee_id, date) لمنع تكرار الحضور في نفس اليوم
 CREATE TABLE IF NOT EXISTS Attendance (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    date TEXT NOT NULL, -- YYYY-MM-DD
-    check_in_time TEXT, -- HH:MM
-    check_out_time TEXT, -- HH:MM
-    late_minutes INTEGER DEFAULT 0,
-    FOREIGN KEY(employee_id) REFERENCES Employees(id)
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id    INTEGER NOT NULL,
+    date           TEXT    NOT NULL,  -- YYYY-MM-DD
+    check_in_time  TEXT,              -- HH:MM
+    check_out_time TEXT,              -- HH:MM
+    late_minutes   INTEGER DEFAULT 0,
+    FOREIGN KEY(employee_id) REFERENCES Employees(id),
+    UNIQUE(employee_id, date)         -- ← المنع الحقيقي للتكرار
 );
 
--- جدول الإجازات (تم تطويره)
+-- ── جدول الإجازات ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Leaves (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
-    start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
-    type TEXT NOT NULL, -- sick, annual, emergency
-    status TEXT DEFAULT 'pending', -- pending, approved, rejected
-    reason TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    start_date  TEXT    NOT NULL,  -- YYYY-MM-DD
+    end_date    TEXT    NOT NULL,  -- YYYY-MM-DD
+    type        TEXT    NOT NULL,  -- annual | sick | emergency
+    status      TEXT    DEFAULT 'pending',  -- pending | approved | rejected
+    reason      TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(employee_id) REFERENCES Employees(id)
 );
 
--- جدول السلف والعهد
+-- ── جدول السلف ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Loans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    reason TEXT NOT NULL,
-    status TEXT DEFAULT 'pending', -- pending, approved, rejected, paid
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    amount      REAL    NOT NULL,
+    reason      TEXT    NOT NULL,
+    status      TEXT    DEFAULT 'pending',  -- pending | approved | rejected | paid
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(employee_id) REFERENCES Employees(id)
 );
 
--- جدول الرواتب المصدرة (لحفظ السجل التاريخي)
+-- ── جدول الرواتب المصدرة ────────────────────────────────────
+-- FIX: إضافة UNIQUE(employee_id, month) لمنع إصدار راتب مكرر لنفس الشهر
 CREATE TABLE IF NOT EXISTS Payroll (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    month TEXT NOT NULL, -- YYYY-MM
-    base_salary REAL NOT NULL,
-    total_deductions REAL DEFAULT 0,
-    net_salary REAL NOT NULL,
-    status TEXT DEFAULT 'issued',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(employee_id) REFERENCES Employees(id)
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id      INTEGER NOT NULL,
+    month            TEXT    NOT NULL,  -- YYYY-MM
+    base_salary      REAL    NOT NULL,
+    total_deductions REAL    DEFAULT 0,
+    net_salary       REAL    NOT NULL,
+    status           TEXT    DEFAULT 'issued',
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(employee_id) REFERENCES Employees(id),
+    UNIQUE(employee_id, month)
 );
 
--- جدول التعاميم
+-- ── جدول التعاميم ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Announcements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    message TEXT NOT NULL,
-    created_by INTEGER NOT NULL, -- admin id
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    message    TEXT    NOT NULL,
+    created_by INTEGER NOT NULL,  -- employee id (admin)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(created_by) REFERENCES Employees(id)
+);
+
+-- ── جدول حالة المحادثة (NEW) ────────────────────────────────
+-- لتتبع المحادثات متعددة الخطوات (طلب إجازة، سلفة، إضافة موظف...)
+CREATE TABLE IF NOT EXISTS ConversationState (
+    telegram_id TEXT PRIMARY KEY,
+    state       TEXT NOT NULL,   -- e.g. 'awaiting_leave_start_date'
+    data        TEXT DEFAULT NULL, -- JSON: extra context
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

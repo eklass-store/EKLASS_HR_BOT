@@ -1,0 +1,137 @@
+// ============================================================
+// src/handlers/callbacks/leaves.callback.ts
+// FIX BUG-07: إشعار الموظف عند قبول/رفض الإجازة
+// ============================================================
+import { Bot } from 'grammy';
+import { Env } from '../../types';
+import { getEmployeeByTelegramId, getAdmins, getEmployeeById } from '../../db/employees.db';
+import {
+  updateLeaveStatus,
+  getLeaveById,
+  getEmployeeLeaves,
+  hasPendingLeave,
+  getLeaveBalance,
+} from '../../db/leaves.db';
+import { setState } from '../../db/state.db';
+import { getMainMenu } from '../../keyboards/main.keyboards';
+import {
+  getLeaveTypeKeyboard,
+  getLeaveApprovalKeyboard,
+  LEAVE_TYPE_NAMES,
+} from '../../keyboards/leave.keyboards';
+
+export function registerLeaveCallbacks(bot: Bot, env: Env): void {
+
+  // ── بدء طلب الإجازة ───────────────────────────────────────
+  bot.callbackQuery('action_leave', async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
+
+    // منع التكرار
+    if (await hasPendingLeave(env, emp.id)) {
+      await ctx.editMessageText(
+        '⚠️ لديك طلب إجازة قيد الانتظار بالفعل.\nانتظر موافقة الإدارة.',
+        { reply_markup: getMainMenu(emp.role === 'admin') }
+      );
+      return ctx.answerCallbackQuery();
+    }
+
+    await setState(env, tid, 'awaiting_leave_type');
+    await ctx.editMessageText('🏖️ *طلب إجازة*\n\nاختر نوع الإجازة:', {
+      parse_mode: 'Markdown',
+      reply_markup: getLeaveTypeKeyboard(),
+    });
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── اختيار نوع الإجازة ────────────────────────────────────
+  bot.callbackQuery(/^leave_type_(annual|sick|emergency)$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const leaveType = ctx.callbackQuery.data.replace('leave_type_', '');
+
+    await setState(env, tid, 'awaiting_leave_start_date', { type: leaveType });
+
+    await ctx.editMessageText(
+      `✅ النوع: *${LEAVE_TYPE_NAMES[leaveType]}*\n\n📅 أرسل تاريخ *بداية* الإجازة:\nالصيغة: YYYY-MM-DD\nمثال: 2024-08-15`,
+      { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── إجازاتي ───────────────────────────────────────────────
+  bot.callbackQuery('action_leaves', async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
+
+    const leaves = await getEmployeeLeaves(env, emp.id);
+    const balance = await getLeaveBalance(env, emp.id);
+    const icons: Record<string, string> = { pending: '⏳', approved: '✅', rejected: '❌' };
+
+    let text = `🏷️ *إجازاتي*\n\n📊 هذا العام: ${balance.approved} مُوافق | ${balance.pending} معلّق\n\n`;
+
+    if (leaves.length === 0) {
+      text += 'لا توجد طلبات إجازة مسجلة.';
+    } else {
+      for (const l of leaves) {
+        text += `${icons[l.status] ?? '❓'} ${l.start_date} ← ${l.end_date} (${LEAVE_TYPE_NAMES[l.type] ?? l.type})\n`;
+      }
+    }
+
+    await ctx.editMessageText(text, {
+      parse_mode: 'Markdown',
+      reply_markup: getMainMenu(emp.role === 'admin'),
+    });
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── موافقة / رفض الإجازة (أدمن) — FIX BUG-07 ─────────────
+  bot.callbackQuery(/^(approve|reject)_leave_\d+$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const admin = await getEmployeeByTelegramId(env, tid);
+    if (!admin || admin.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+
+    const parts = ctx.callbackQuery.data.split('_');
+    const isApprove = parts[0] === 'approve';
+    const leaveId = parseInt(parts[2]);
+
+    const leave = await getLeaveById(env, leaveId);
+    if (!leave) return ctx.answerCallbackQuery('الطلب غير موجود!');
+    if (leave.status !== 'pending') {
+      return ctx.answerCallbackQuery(`تمت معالجة هذا الطلب مسبقاً (${leave.status})`);
+    }
+
+    const newStatus = isApprove ? 'approved' : 'rejected';
+    await updateLeaveStatus(env, leaveId, newStatus);
+
+    // FIX BUG-07: إشعار الموظف
+    const employee = await getEmployeeById(env, leave.employee_id);
+    if (employee) {
+      const notif = isApprove
+        ? `✅ *تمت الموافقة على إجازتك*\n📅 ${leave.start_date} ← ${leave.end_date}\n(${LEAVE_TYPE_NAMES[leave.type] ?? leave.type})\nبالتوفيق! 🌟`
+        : `❌ *تم رفض طلب إجازتك*\n📅 ${leave.start_date} ← ${leave.end_date}\nيرجى التواصل مع الإدارة لمزيد من التفاصيل.`;
+      try {
+        await bot.api.sendMessage(employee.telegram_id, notif, { parse_mode: 'Markdown' });
+      } catch (_) {}
+    }
+
+    await ctx.editMessageText(
+      `${isApprove ? '✅ تمت الموافقة' : '❌ تم الرفض'} على إجازة *${employee?.full_name ?? 'الموظف'}*\n📅 ${leave.start_date} ← ${leave.end_date}`,
+      { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── إلغاء أي عملية جارية ──────────────────────────────────
+  bot.callbackQuery('cancel_action', async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const { clearState } = await import('../../db/state.db');
+    await clearState(env, tid);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    await ctx.editMessageText('✅ تم الإلغاء.', {
+      reply_markup: emp ? getMainMenu(emp.role === 'admin') : undefined,
+    });
+    await ctx.answerCallbackQuery();
+  });
+}

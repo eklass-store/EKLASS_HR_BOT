@@ -1,0 +1,297 @@
+// ============================================================
+// src/handlers/messages.handler.ts
+// معالج الرسائل النصية لجميع المحادثات متعددة الخطوات:
+//   - طلب إجازة (نوع → تاريخ بداية → تاريخ نهاية → سبب)
+//   - طلب سلفة (مبلغ → سبب)
+//   - إضافة موظف (telegram_id → اسم → راتب)
+//   - تعديل راتب موظف
+//   - تعديل إعدادات الدوام
+//   - إرسال تعميم
+// ============================================================
+import { Bot } from 'grammy';
+import { Env } from '../types';
+import { getEmployeeByTelegramId, addEmployee } from '../db/employees.db';
+import { getState, setState, clearState, parseStateData } from '../db/state.db';
+import { createLeave } from '../db/leaves.db';
+import { createLoan } from '../db/loans.db';
+import { updateSetting } from '../db/settings.db';
+import { createAnnouncement } from '../db/announcements.db';
+import { getAllEmployees } from '../db/employees.db';
+import { getAdmins } from '../db/employees.db';
+import { getMainMenu, getAdminMenu, getEmployeeManagementMenu } from '../keyboards/main.keyboards';
+import { getLeaveApprovalKeyboard, LEAVE_TYPE_NAMES } from '../keyboards/leave.keyboards';
+import { getLoanApprovalKeyboard } from '../keyboards/loan.keyboards';
+import { isValidDate, isValidTime } from '../utils/time';
+
+const SETTING_NAMES: Record<string, string> = {
+  work_start_time:           'وقت بداية الدوام',
+  work_end_time:             'وقت نهاية الدوام',
+  late_deduction_per_minute: 'خصم دقيقة التأخير',
+};
+
+export function registerMessageHandler(bot: Bot, env: Env): void {
+  bot.on('message:text', async (ctx) => {
+    const tid  = String(ctx.from?.id);
+    const text = ctx.message.text.trim();
+
+    // تجاهل الأوامر — تعالجها handlers خاصة بها
+    if (text.startsWith('/')) return;
+
+    const stateRecord = await getState(env, tid);
+    if (!stateRecord) return; // لا توجد محادثة نشطة
+
+    const state = stateRecord.state;
+    const data  = parseStateData(stateRecord);
+    const emp   = await getEmployeeByTelegramId(env, tid);
+
+    // ──────────────────────────────────────────────────────────
+    // ❶ طلب الإجازة — تاريخ البداية
+    // ──────────────────────────────────────────────────────────
+    if (state === 'awaiting_leave_start_date') {
+      if (!isValidDate(text)) {
+        return ctx.reply('⚠️ صيغة التاريخ غير صحيحة.\nاستخدم: YYYY-MM-DD\nمثال: 2024-08-15');
+      }
+      await setState(env, tid, 'awaiting_leave_end_date', { ...data, startDate: text });
+      return ctx.reply(
+        `✅ تاريخ البداية: *${text}*\n\n📅 أرسل الآن تاريخ *نهاية* الإجازة:`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❷ طلب الإجازة — تاريخ النهاية
+    // ──────────────────────────────────────────────────────────
+    if (state === 'awaiting_leave_end_date') {
+      if (!isValidDate(text)) {
+        return ctx.reply('⚠️ صيغة التاريخ غير صحيحة. مثال: 2024-08-20');
+      }
+      const startDate = data['startDate'] as string;
+      if (text < startDate) {
+        return ctx.reply(`⚠️ تاريخ النهاية يجب أن يكون بعد تاريخ البداية (${startDate})!`);
+      }
+      await setState(env, tid, 'awaiting_leave_reason', { ...data, endDate: text });
+      return ctx.reply(
+        `✅ من *${startDate}* إلى *${text}*\n\n📝 أرسل سبب الإجازة (أو أرسل \`—\` للتخطي):`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❸ طلب الإجازة — السبب + الإرسال
+    // ──────────────────────────────────────────────────────────
+    if (state === 'awaiting_leave_reason') {
+      if (!emp) { await clearState(env, tid); return; }
+
+      const reason    = text === '—' ? '' : text;
+      const startDate = data['startDate'] as string;
+      const endDate   = data['endDate']   as string;
+      const type      = data['type']      as string;
+
+      const leaveId = await createLeave(env, emp.id, startDate, endDate, type, reason);
+
+      // إشعار الأدمن
+      const admins = await getAdmins(env);
+      const kb     = getLeaveApprovalKeyboard(leaveId);
+      for (const admin of admins) {
+        try {
+          await bot.api.sendMessage(
+            admin.telegram_id,
+            `📩 *طلب إجازة جديد*\n\nالموظف: ${emp.full_name}\nالنوع: ${LEAVE_TYPE_NAMES[type] ?? type}\nمن: ${startDate}\nإلى: ${endDate}` +
+            (reason ? `\nالسبب: ${reason}` : ''),
+            { parse_mode: 'Markdown', reply_markup: kb }
+          );
+        } catch (_) {}
+      }
+
+      await clearState(env, tid);
+      return ctx.reply(
+        `✅ تم إرسال طلب الإجازة بنجاح!\n\n📅 من *${startDate}* إلى *${endDate}*\n(${LEAVE_TYPE_NAMES[type] ?? type})\n\nبانتظار موافقة الإدارة ⏳`,
+        { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❹ طلب السلفة — المبلغ
+    // ──────────────────────────────────────────────────────────
+    if (state === 'awaiting_loan_amount') {
+      const amount = parseFloat(text);
+      if (isNaN(amount) || amount <= 0) {
+        return ctx.reply('⚠️ يرجى إرسال مبلغ صحيح بالأرقام فقط.\nمثال: 500');
+      }
+      await setState(env, tid, 'awaiting_loan_reason', { ...data, amount });
+      return ctx.reply(
+        `✅ المبلغ: *${amount}* ريال\n\n📝 أرسل *سبب* طلب السلفة:`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❺ طلب السلفة — السبب + الإرسال
+    // ──────────────────────────────────────────────────────────
+    if (state === 'awaiting_loan_reason') {
+      if (!emp) { await clearState(env, tid); return; }
+
+      const amount = data['amount'] as number;
+      const loanId = await createLoan(env, emp.id, amount, text);
+
+      // إشعار الأدمن
+      const admins = await getAdmins(env);
+      const kb     = getLoanApprovalKeyboard(loanId);
+      for (const admin of admins) {
+        try {
+          await bot.api.sendMessage(
+            admin.telegram_id,
+            `💸 *طلب سلفة جديد*\n\nالموظف: ${emp.full_name}\nالمبلغ: ${amount} ريال\nالسبب: ${text}`,
+            { parse_mode: 'Markdown', reply_markup: kb }
+          );
+        } catch (_) {}
+      }
+
+      await clearState(env, tid);
+      return ctx.reply(
+        `✅ تم إرسال طلب السلفة بمبلغ *${amount}* ريال\nبانتظار موافقة الإدارة ⏳`,
+        { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❻ [ADMIN] إضافة موظف — Telegram ID
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_emp_telegram_id') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      if (!/^\d+$/.test(text)) {
+        return ctx.reply('⚠️ الـ Telegram ID يجب أن يكون أرقاماً فقط.\nمثال: 123456789');
+      }
+      const existing = await getEmployeeByTelegramId(env, text);
+      if (existing) {
+        return ctx.reply(`⚠️ هذا الـ ID مسجل بالفعل للموظف: *${existing.full_name}*`, {
+          parse_mode: 'Markdown',
+        });
+      }
+
+      await setState(env, tid, 'admin_awaiting_emp_name', { telegramId: text });
+      return ctx.reply(
+        `✅ Telegram ID: \`${text}\`\n\n*الخطوة 2/3* — أرسل الاسم الكامل للموظف:`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❼ [ADMIN] إضافة موظف — الاسم
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_emp_name') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      await setState(env, tid, 'admin_awaiting_emp_salary', { ...data, fullName: text });
+      return ctx.reply(
+        `✅ الاسم: *${text}*\n\n*الخطوة 3/3* — أرسل الراتب الأساسي (بالأرقام):`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❽ [ADMIN] إضافة موظف — الراتب + الحفظ
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_emp_salary') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      const salary = parseFloat(text);
+      if (isNaN(salary) || salary < 0) {
+        return ctx.reply('⚠️ يرجى إرسال الراتب بالأرقام فقط. مثال: 3000');
+      }
+
+      const telegramId = data['telegramId'] as string;
+      const fullName   = data['fullName']   as string;
+
+      await addEmployee(env, telegramId, fullName, salary);
+      await clearState(env, tid);
+
+      return ctx.reply(
+        `✅ *تم إضافة الموظف بنجاح!*\n\nالاسم: ${fullName}\nالراتب: ${salary} ريال\nTelegram ID: \`${telegramId}\``,
+        { parse_mode: 'Markdown', reply_markup: getEmployeeManagementMenu() }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❾ [ADMIN] تعديل راتب موظف
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_salary_update') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      const salary = parseFloat(text);
+      if (isNaN(salary) || salary < 0) {
+        return ctx.reply('⚠️ يرجى إرسال الراتب بالأرقام فقط.');
+      }
+
+      const empId = data['empId'] as number;
+      const employee = await env.DB.prepare('SELECT full_name FROM Employees WHERE id = ?')
+        .bind(empId).first() as any;
+
+      await env.DB.prepare('UPDATE Employees SET base_salary = ? WHERE id = ?')
+        .bind(salary, empId).run();
+      await clearState(env, tid);
+
+      return ctx.reply(
+        `✅ تم تحديث راتب *${employee?.full_name ?? 'الموظف'}* إلى *${salary}* ريال`,
+        { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ❿ [ADMIN] تعديل إعداد الدوام
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_setting') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      const key = data['key'] as string;
+
+      // تحقق من الصيغة
+      if (key === 'work_start_time' || key === 'work_end_time') {
+        if (!isValidTime(text)) {
+          return ctx.reply('⚠️ صيغة الوقت غير صحيحة.\nاستخدم HH:MM — مثال: `09:00`', {
+            parse_mode: 'Markdown',
+          });
+        }
+      } else if (key === 'late_deduction_per_minute') {
+        if (isNaN(parseFloat(text))) {
+          return ctx.reply('⚠️ يرجى إرسال رقم صحيح. مثال: `2.5`', { parse_mode: 'Markdown' });
+        }
+      }
+
+      await updateSetting(env, key, text);
+      await clearState(env, tid);
+
+      return ctx.reply(
+        `✅ تم تحديث *"${SETTING_NAMES[key] ?? key}"* إلى: \`${text}\``,
+        { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ⓫ [ADMIN] إرسال تعميم
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_broadcast_text') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      await createAnnouncement(env, text, emp.id);
+
+      const employees = await getAllEmployees(env);
+      let sentCount = 0;
+      for (const e of employees) {
+        try {
+          await bot.api.sendMessage(e.telegram_id, `📢 *تعميم إداري:*\n\n${text}`, {
+            parse_mode: 'Markdown',
+          });
+          sentCount++;
+        } catch (_) {}
+      }
+
+      await clearState(env, tid);
+      return ctx.reply(
+        `✅ تم إرسال التعميم إلى *${sentCount}* موظف بنجاح.`,
+        { parse_mode: 'Markdown', reply_markup: getAdminMenu() }
+      );
+    }
+  });
+}
