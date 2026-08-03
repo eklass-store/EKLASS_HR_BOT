@@ -11,12 +11,6 @@ import { registerAttendanceCallbacks } from './handlers/callbacks/attendance.cal
 import { registerLeaveCallbacks }      from './handlers/callbacks/leaves.callback';
 import { registerLoanCallbacks }       from './handlers/callbacks/loans.callback';
 import { registerSalaryCallbacks }     from './handlers/callbacks/salary.callback';
-import { registerAdminPanelCallbacks }     from './handlers/callbacks/admin/panel.callback';
-import { registerAdminEmployeeCallbacks }  from './handlers/callbacks/admin/employees.callback';
-import { registerAdminPayrollCallbacks }   from './handlers/callbacks/admin/payroll.callback';
-import { registerAdminReportCallbacks }    from './handlers/callbacks/admin/reports.callback';
-import { registerAdminSettingsCallbacks }  from './handlers/callbacks/admin/settings.callback';
-import { registerAdminHolidaysCallbacks }  from './handlers/callbacks/admin/holidays.callback';
 import { registerMessageHandler } from './handlers/messages.handler';
 
 export const handleWebhook = async (request: Request, env: Env): Promise<Response> => {
@@ -74,13 +68,6 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
   registerLeaveCallbacks(bot, env);
   registerLoanCallbacks(bot, env);
   registerSalaryCallbacks(bot, env);
-
-  registerAdminPanelCallbacks(bot, env);
-  registerAdminEmployeeCallbacks(bot, env);
-  registerAdminPayrollCallbacks(bot, env);
-  registerAdminReportCallbacks(bot, env);
-  registerAdminSettingsCallbacks(bot, env);
-  registerAdminHolidaysCallbacks(bot, env);
 
   registerMessageHandler(bot, env);
 

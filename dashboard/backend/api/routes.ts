@@ -3,6 +3,7 @@
 // ============================================================
 import { Env } from '../types';
 import { SignJWT, jwtVerify } from 'jose';
+import { handleAdminRoutes } from './admin';
 
 // Helper for CORS headers
 const corsHeaders = {
@@ -96,14 +97,16 @@ export async function handleApiRoutes(
   // ── Authentication Middleware for Dashboard API ───────────────
   // We allow either JWT via Authorization header or API Key via X-API-KEY
   let isAuthenticated = false;
+  let adminId = 0;
   
   const authHeader = request.headers.get('Authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
       const secret = new TextEncoder().encode(env.JWT_SECRET || env.BOT_TOKEN);
-      await jwtVerify(token, secret);
+      const decoded = await jwtVerify(token, secret);
       isAuthenticated = true;
+      adminId = Number(decoded.payload.id || 0);
     } catch (err) {
       // invalid token
     }
@@ -119,6 +122,12 @@ export async function handleApiRoutes(
       status: 401, 
       headers: { 'Content-Type': 'application/json', ...corsHeaders } 
     });
+  }
+
+  // ── Route Admin API Calls ──────────────────────────────────
+  if (url.pathname.startsWith('/api/admin/')) {
+    const adminResponse = await handleAdminRoutes(request, env, adminId);
+    if (adminResponse) return adminResponse;
   }
 
   // ── GET /api/stats ─────────────────────────────────────────

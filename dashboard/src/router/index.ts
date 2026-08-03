@@ -20,9 +20,24 @@ const router = createRouter({
           component: () => import('../views/EmployeesView.vue')
         },
         {
+          path: 'requests',
+          name: 'requests',
+          component: () => import('../views/RequestsView.vue')
+        },
+        {
           path: 'payroll',
           name: 'payroll',
           component: () => import('../views/PayrollView.vue')
+        },
+        {
+          path: 'broadcast',
+          name: 'broadcast',
+          component: () => import('../views/BroadcastView.vue')
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('../views/SettingsView.vue')
         }
       ]
     }

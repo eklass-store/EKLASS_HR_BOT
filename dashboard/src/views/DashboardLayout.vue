@@ -13,9 +13,21 @@
                 :class="[$route.name === 'employees' ? 'border-black text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
                 Employees
               </router-link>
+              <router-link to="/requests" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
+                :class="[$route.name === 'requests' ? 'border-black text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
+                Requests
+              </router-link>
               <router-link to="/payroll" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
                 :class="[$route.name === 'payroll' ? 'border-black text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
                 Attendance & Payroll
+              </router-link>
+              <router-link to="/broadcast" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
+                :class="[$route.name === 'broadcast' ? 'border-black text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
+                Broadcast
+              </router-link>
+              <router-link to="/settings" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
+                :class="[$route.name === 'settings' ? 'border-black text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
+                Settings
               </router-link>
             </div>
           </div>
