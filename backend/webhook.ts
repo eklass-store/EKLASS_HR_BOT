@@ -19,7 +19,12 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
     return new Response('BOT_TOKEN is missing', { status: 500 });
   }
 
-
+  if (env.WEBHOOK_SECRET) {
+    const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    if (secretToken !== env.WEBHOOK_SECRET) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+  }
 
   const bot = new Bot(env.BOT_TOKEN);
 
