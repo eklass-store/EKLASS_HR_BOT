@@ -71,11 +71,16 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
 
   try {
-    const cb = webhookCallback(bot, 'cloudflare-mod');
-    return await cb(request);
-  } catch (err) {
+    const update = await request.json();
+    await bot.handleUpdate(update);
+    return new Response('OK', { status: 200 });
+  } catch (err: any) {
     console.error('[Webhook Error]', err);
-    // Respond with 200 so Telegram stops retrying the same failing request
+    try {
+        if (env.INITIAL_ADMIN_ID) {
+           await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage?chat_id=${env.INITIAL_ADMIN_ID}&text=FatalError:%20${err.message}`);
+        }
+    } catch (_) {}
     return new Response('OK', { status: 200 });
   }
 };
