@@ -1,5 +1,5 @@
-import { handleApiRoutes } from '../../../src/api/routes';
-import { Env } from '../../../src/types';
+import { handleApiRoutes } from '../../backend/api/routes';
+import { Env } from '../../backend/types';
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const apiResponse = await handleApiRoutes(context.request, context.env);
