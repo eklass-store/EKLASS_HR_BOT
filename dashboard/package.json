@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.5.40",
-    "vue-router": "^4.4.5",
-    "pinia": "^2.2.4",
-    "lucide-vue-next": "^0.450.0"
+    "vue": "latest",
+    "vue-router": "latest",
+    "pinia": "latest",
+    "lucide-vue-next": "latest"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.14",
