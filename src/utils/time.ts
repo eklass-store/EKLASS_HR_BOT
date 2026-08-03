@@ -83,7 +83,7 @@ export function isValidTime(timeStr: string): boolean {
  * @param dateStr YYYY-MM-DD
  */
 export function isWeekend(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const day = d.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const day = d.getUTCDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
   return day === 5 || day === 6;
 }

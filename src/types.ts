@@ -5,6 +5,7 @@
 export interface Env {
   DB: D1Database;
   BOT_TOKEN: string;
+  WEBHOOK_SECRET?: string; // Secure webhook token
   TIMEZONE?: string; // e.g. 'Africa/Cairo', 'Asia/Riyadh'
   API_KEY?: string;
   INITIAL_ADMIN_ID?: string;

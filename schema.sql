@@ -107,16 +107,15 @@ CREATE TABLE IF NOT EXISTS AuditLogs (
     FOREIGN KEY(admin_id) REFERENCES Employees(id)
 );
 
--- ── جدول Rate Limit (NEW) ──────────────────────────────────
-CREATE TABLE IF NOT EXISTS RateLimits (
-    telegram_id TEXT PRIMARY KEY,
-    last_request_time INTEGER NOT NULL,
-    request_count INTEGER DEFAULT 1
-);
-
 -- ── جدول العطلات والأيام المستثناة (NEW) ───────────────────
 CREATE TABLE IF NOT EXISTS Holidays (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     holiday_date TEXT NOT NULL UNIQUE, -- YYYY-MM-DD
     description TEXT
 );
+
+-- ── الفهارس لتسريع البحث (Indexes) ─────────────────────────
+CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON Attendance(employee_id, date);
+CREATE INDEX IF NOT EXISTS idx_leaves_employee_status ON Leaves(employee_id, status);
+CREATE INDEX IF NOT EXISTS idx_loans_employee_status ON Loans(employee_id, status);
+CREATE INDEX IF NOT EXISTS idx_payroll_employee_month ON Payroll(employee_id, month);

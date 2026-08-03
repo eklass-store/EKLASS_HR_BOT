@@ -101,7 +101,11 @@ export async function handleApiRoutes(
   // ── POST /api/set-webhook ─────────────────────────────────────
   if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
     const webhookUrl = `https://${url.host}`;
-    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`);
+    let apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`;
+    if (env.WEBHOOK_SECRET) {
+      apiUrl += `&secret_token=${env.WEBHOOK_SECRET}`;
+    }
+    const res = await fetch(apiUrl);
     const data = await res.json();
     return new Response(JSON.stringify({ setting: webhookUrl, data }), {
       headers: { 'Content-Type': 'application/json' },

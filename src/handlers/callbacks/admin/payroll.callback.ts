@@ -85,7 +85,11 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
       const minuteRate = dailyRate / workMinutes; // أجر الدقيقة للخصم
 
       const lateMinutes   = await getTotalLateMinutes(env, employee.id, month);
-      const lateDeduction = lateMinutes * minuteRate;
+      let lateDeduction = lateMinutes * minuteRate;
+      
+      // Ensure lateDeduction does not exceed baseSalary
+      lateDeduction = Math.min(lateDeduction, baseSalary);
+
       const originalLoan  = await getTotalActiveLoan(env, employee.id);
       
       let activeLoan = originalLoan;

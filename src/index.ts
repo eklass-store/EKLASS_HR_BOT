@@ -48,9 +48,16 @@ export default {
     }
 
     // ── 3. Telegram Webhook (POST) ─────────────────────────────
+    if (env.WEBHOOK_SECRET) {
+      const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+      if (secretToken !== env.WEBHOOK_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+    }
+
     const bot = new Bot(env.BOT_TOKEN);
 
-    // Rate Limiting Middleware
+    // Rate Limiting Middleware (In-Memory)
     bot.use(async (ctx, next) => {
       const tid = String(ctx.from?.id);
       if (!tid || tid === 'undefined') return next();
@@ -59,24 +66,31 @@ export default {
       const WINDOW_MS = 2000; // 2 seconds
       const MAX_REQUESTS = 4;
 
-      try {
-        const record = await env.DB.prepare("SELECT last_request_time, request_count FROM RateLimits WHERE telegram_id = ?").bind(tid).first() as any;
-        if (!record) {
-          await env.DB.prepare("INSERT INTO RateLimits (telegram_id, last_request_time, request_count) VALUES (?, ?, 1)").bind(tid, now).run();
-        } else {
-          if (now - record.last_request_time < WINDOW_MS) {
-            if (record.request_count >= MAX_REQUESTS) {
-              return; // Drop request silently
-            } else {
-              await env.DB.prepare("UPDATE RateLimits SET request_count = request_count + 1 WHERE telegram_id = ?").bind(tid).run();
-            }
-          } else {
-            await env.DB.prepare("UPDATE RateLimits SET last_request_time = ?, request_count = 1 WHERE telegram_id = ?").bind(now, tid).run();
-          }
-        }
-      } catch (err) {
-        // ignore db errors to not block flow
+      // Initialize global memory map if it doesn't exist (persists across warm invocations in Cloudflare Workers)
+      if (!(globalThis as any).rateLimits) {
+        (globalThis as any).rateLimits = new Map<string, { last_request_time: number; request_count: number }>();
       }
+      const rateLimits = (globalThis as any).rateLimits as Map<string, { last_request_time: number; request_count: number }>;
+
+      const record = rateLimits.get(tid);
+      if (!record) {
+        rateLimits.set(tid, { last_request_time: now, request_count: 1 });
+      } else {
+        if (now - record.last_request_time < WINDOW_MS) {
+          if (record.request_count >= MAX_REQUESTS) {
+            return; // Drop request silently
+          } else {
+            record.request_count++;
+          }
+        } else {
+          record.last_request_time = now;
+          record.request_count = 1;
+        }
+      }
+
+      // Cleanup memory to prevent leaks
+      if (rateLimits.size > 10000) rateLimits.clear();
+
       return next();
     });
 
