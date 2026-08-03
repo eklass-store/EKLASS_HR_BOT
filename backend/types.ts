@@ -6,11 +6,12 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   BOT_TOKEN: string;
-  WEBHOOK_SECRET?: string; // Secure webhook token
+  WEBHOOK_SECRET?: string;
   JWT_SECRET: string;
-  TIMEZONE?: string; // e.g. 'Africa/Cairo', 'Asia/Riyadh'
+  TIMEZONE?: string;
   API_KEY?: string;
   INITIAL_ADMIN_ID?: string;
+  ALLOWED_ORIGIN?: string; // نطاق الداشبورد — مثال: https://eklass.pages.dev
 }
 
 export interface Employee {

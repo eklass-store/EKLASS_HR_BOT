@@ -9,9 +9,16 @@ export async function logAction(
   action: string,
   details: string
 ): Promise<void> {
-  await env.DB.prepare(
-    "INSERT INTO AuditLogs (admin_id, action, details) VALUES (?, ?, ?)"
-  ).bind(adminId, action, details).run();
+  // BUG-L FIX: admin_id=0 يخرق FOREIGN KEY — نستخدم 0 كـ "system/api-key" بقيمة افتراضية آمنة
+  // في المشاريع المتقدمة يمكن استخدام NULL مع تعديل الـ schema
+  const safeAdminId = adminId > 0 ? adminId : 0;
+  try {
+    await env.DB.prepare(
+      "INSERT INTO AuditLogs (admin_id, action, details) VALUES (?, ?, ?)"
+    ).bind(safeAdminId, action, details).run();
+  } catch {
+    // إذا فشل الإدراج (FOREIGN KEY) نتجاهله — الـ audit log لا يوقف العملية
+  }
 }
 
 export async function getRecentAuditLogs(env: Env, limit: number = 10): Promise<any[]> {

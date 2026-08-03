@@ -27,38 +27,9 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
   const bot = new Bot(env.BOT_TOKEN);
 
-  bot.use(async (ctx, next) => {
-    const tid = String(ctx.from?.id);
-    if (!tid || tid === 'undefined') return next();
-
-    const now = Date.now();
-    const WINDOW_MS = 2000;
-    const MAX_REQUESTS = 4;
-
-    if (!(globalThis as any).rateLimits) {
-      (globalThis as any).rateLimits = new Map<string, { last_request_time: number; request_count: number }>();
-    }
-    const rateLimits = (globalThis as any).rateLimits as Map<string, { last_request_time: number; request_count: number }>;
-
-    const record = rateLimits.get(tid);
-    if (!record) {
-      rateLimits.set(tid, { last_request_time: now, request_count: 1 });
-    } else {
-      if (now - record.last_request_time < WINDOW_MS) {
-        if (record.request_count >= MAX_REQUESTS) {
-          return;
-        } else {
-          record.request_count++;
-        }
-      } else {
-        record.last_request_time = now;
-        record.request_count = 1;
-      }
-    }
-
-    if (rateLimits.size > 10000) rateLimits.clear();
-    return next();
-  });
+  // NOTE BUG-K: Rate Limiter باستخدام globalThis لا يعمل في Cloudflare Workers
+  // لأن كل request معزول في context خاص ولا يشارك الذاكرة بين الطلبات
+  // لتفعيل Rate Limiting حقيقي يجب استخدام: Cloudflare Rate Limiting Rules أو KV/Durable Objects
 
   registerStartCommand(bot, env);
   registerHelpCommand(bot, env);

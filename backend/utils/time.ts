@@ -28,6 +28,7 @@ export function getNow(timezone = 'Africa/Cairo'): { date: string; time: string 
 }
 
 export function toMinutes(t: string): number {
+  if (!t || !/^\d{2}:\d{2}$/.test(t)) return 0; // BUG-M FIX: تجنب NaN
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 }
@@ -62,11 +63,18 @@ export function getDaysInMonth(month: string): number {
  * يتحقق من صحة صيغة التاريخ YYYY-MM-DD
  */
 export function isValidDate(dateStr: string): boolean {
+  // BUG-G FIX: لا نستخدم toISOString() (UTC) لأنه يرفض تواريخ صحيحة
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-  const d = new Date(dateStr);
-  if (!(d instanceof Date) || isNaN(d.getTime())) return false;
-  // Ensure the parsed date exactly matches the input (prevents 2024-02-30 -> 2024-03-01)
-  return d.toISOString().startsWith(dateStr);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  // التحقق من صحة التاريخ بمقارنة المكونات مباشرة
+  const d = new Date(year, month - 1, day); // لا UTC — local
+  return (
+    d.getFullYear() === year &&
+    d.getMonth() === month - 1 &&
+    d.getDate() === day
+  );
 }
 
 /**

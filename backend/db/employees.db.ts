@@ -66,9 +66,19 @@ export async function updateEmployeeSalary(env: Env, id: number, salary: number)
 
 /** Soft delete — لا نحذف البيانات التاريخية */
 export async function softDeleteEmployee(env: Env, id: number): Promise<void> {
+  // جلب الموظف أولاً لمعرفة telegram_id
+  const emp = await env.DB.prepare("SELECT telegram_id FROM Employees WHERE id = ?").bind(id).first() as { telegram_id: string } | null;
+  
   await env.DB.prepare(
     "UPDATE Employees SET is_active = 0 WHERE id = ?"
   ).bind(id).run();
+
+  // BUG-B FIX: حذف حالة المحادثة النشطة حتى لا يكمل طلباته بعد التعطيل
+  if (emp?.telegram_id) {
+    await env.DB.prepare(
+      "DELETE FROM ConversationState WHERE telegram_id = ?"
+    ).bind(emp.telegram_id).run();
+  }
 }
 
 export async function updateEmployeeRole(env: Env, id: number, role: 'admin' | 'employee'): Promise<void> {

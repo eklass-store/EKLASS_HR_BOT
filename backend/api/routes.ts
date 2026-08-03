@@ -5,12 +5,13 @@ import { Env } from '../types';
 import { SignJWT, jwtVerify } from 'jose';
 import { handleAdminRoutes } from './admin';
 
-// Helper for CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+// Helper for CORS headers — BUG-C FIX: يستخدم ALLOWED_ORIGIN من env بدل *
+const getCorsHeaders = (env: Env) => ({
+  'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN ?? '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-KEY',
-};
+  'Vary': 'Origin',
+});
 
 export async function handleApiRoutes(
   request: Request,
@@ -21,7 +22,7 @@ export async function handleApiRoutes(
   // Handle CORS Preflight
   if (request.method === 'OPTIONS') {
     if (url.pathname.startsWith('/api/')) {
-      return new Response(null, { headers: corsHeaders });
+      return new Response(null, { headers: getCorsHeaders(env) });
     }
     return null;
   }
@@ -40,7 +41,7 @@ export async function handleApiRoutes(
       const authDate = Number(userData.auth_date);
       const now = Math.floor(Date.now() / 1000);
       if (!authDate || now - authDate > 86400) { // Max 24 hours old
-        return new Response(JSON.stringify({ error: 'Authentication data is expired' }), { status: 401, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Authentication data is expired' }), { status: 401, headers: getCorsHeaders(env) });
       }
 
       // Verify Telegram Auth Hash (HMAC-SHA256)
@@ -60,20 +61,20 @@ export async function handleApiRoutes(
       const hexSignature = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
 
       if (hexSignature !== hash) {
-        return new Response(JSON.stringify({ error: 'Invalid authentication data' }), { status: 401, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Invalid authentication data' }), { status: 401, headers: getCorsHeaders(env) });
       }
 
-      // Check if user is admin in DB
+      // BUG-D FIX: إضافة AND is_active = 1 لمنع الأدمن المحذوف من تسجيل الدخول
       const telegramId = String(userData.id);
-      const adminCheck = await env.DB.prepare("SELECT * FROM Employees WHERE telegram_id = ? AND role = 'admin'").bind(telegramId).first();
+      const adminCheck = await env.DB.prepare("SELECT * FROM Employees WHERE telegram_id = ? AND role = 'admin' AND is_active = 1").bind(telegramId).first();
       
       if (!adminCheck) {
-        return new Response(JSON.stringify({ error: 'User is not an admin in the HR system' }), { status: 403, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'User is not an admin in the HR system' }), { status: 403, headers: getCorsHeaders(env) });
       }
 
       // Issue JWT
       if (!env.JWT_SECRET) {
-        return new Response(JSON.stringify({ error: 'Server misconfiguration: JWT_SECRET is missing' }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Server misconfiguration: JWT_SECRET is missing' }), { status: 500, headers: getCorsHeaders(env) });
       }
       const secret = new TextEncoder().encode(env.JWT_SECRET);
       const jwt = await new SignJWT({ id: telegramId, name: userData.first_name, role: 'admin' })
@@ -83,10 +84,10 @@ export async function handleApiRoutes(
         .sign(secret);
 
       return new Response(JSON.stringify({ token: jwt, user: userData }), {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
       });
     } catch (err: any) {
-      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: getCorsHeaders(env) });
     }
   }
 
@@ -117,7 +118,7 @@ export async function handleApiRoutes(
   if (!isAuthenticated) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
       status: 401, 
-      headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } 
     });
   }
 
@@ -131,7 +132,7 @@ export async function handleApiRoutes(
     const res = await fetch(apiUrl);
     const data = await res.json();
     return new Response(JSON.stringify({ setting: webhookUrl, data }), {
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
     });
   }
 
@@ -157,7 +158,7 @@ export async function handleApiRoutes(
         pending_leaves:   pendingLeaves?.c   ?? 0,
         pending_loans:    pendingLoans?.c    ?? 0,
       }),
-      { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      { headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } }
     );
   }
 
@@ -167,7 +168,7 @@ export async function handleApiRoutes(
       "SELECT id, full_name, role, department, base_salary, telegram_id, is_active, created_at FROM Employees ORDER BY full_name"
     ).all();
     return new Response(JSON.stringify(result.results), {
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
     });
   }
   
@@ -189,7 +190,7 @@ export async function handleApiRoutes(
     }));
 
     return new Response(JSON.stringify(records), {
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
     });
   }
 
@@ -206,7 +207,7 @@ export async function handleApiRoutes(
   if (request.method === 'GET' && url.pathname === '/api/export/monthly') {
     const month = url.searchParams.get('month');
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-      return new Response('Invalid month parameter. Format must be YYYY-MM', { status: 400, headers: corsHeaders });
+      return new Response('Invalid month parameter. Format must be YYYY-MM', { status: 400, headers: getCorsHeaders(env) });
     }
     const { exportMonthlyReport } = await import('./export');
     const res = await exportMonthlyReport(env, month);
@@ -220,10 +221,10 @@ export async function handleApiRoutes(
     const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`);
     const data = await res.json();
     return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
     });
   }
 
   // Return 404 for unknown API routes
-  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: getCorsHeaders(env) });
 }

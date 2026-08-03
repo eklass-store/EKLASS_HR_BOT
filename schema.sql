@@ -114,7 +114,14 @@ CREATE TABLE IF NOT EXISTS Holidays (
     description TEXT
 );
 
--- ── الفهارس لتسريع البحث (Indexes) ─────────────────────────
+-- -- FIX BUG-I: Trigger لتحديث updated_at عند INSERT OR REPLACE
+CREATE TRIGGER IF NOT EXISTS update_conversation_state_timestamp
+AFTER INSERT ON ConversationState
+BEGIN
+  UPDATE ConversationState SET updated_at = CURRENT_TIMESTAMP WHERE telegram_id = NEW.telegram_id;
+END;
+
+-- الفهارس لتسريع البحث (Indexes)
 CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON Attendance(employee_id, date);
 CREATE INDEX IF NOT EXISTS idx_leaves_employee_status ON Leaves(employee_id, status);
 CREATE INDEX IF NOT EXISTS idx_loans_employee_status ON Loans(employee_id, status);

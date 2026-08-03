@@ -71,7 +71,19 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
     }
 
     const stateRecord = await getState(env, tid);
-    if (!stateRecord) return; // لا توجد محادثة نشطة
+    if (!stateRecord) {
+      // BUG-A FIX: لا تصمت — أخبر المستخدم بالقائمة
+      const employee = await getEmployeeByTelegramId(env, tid);
+      if (employee) {
+        return ctx.reply(
+          '💬 لا توجد عملية جارية.\nاستخدم القائمة أدناه:',
+          { reply_markup: getMainMenu(employee.role === 'admin') }
+        );
+      }
+      return ctx.reply(
+        '👋 أنت غير مسجل في النظام.\nيرجى التواصل مع الإدارة لتسجيل بياناتك.'
+      );
+    }
 
     const state = stateRecord.state;
     const data  = parseStateData(stateRecord);
