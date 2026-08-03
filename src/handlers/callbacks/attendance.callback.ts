@@ -45,6 +45,21 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
     const isOffDay = isWeekend(date) || await isHoliday(env, date);
 
+    // منع تسجيل الحضور المبكر جداً (قبل أكثر من ساعتين من موعد الدوام)
+    const { toMinutes } = await import('../../utils/time');
+    const startMins = toMinutes(startTime);
+    const currMins = toMinutes(time);
+    
+    // نسمح بتسجيل الحضور قبل الدوام بـ 120 دقيقة كحد أقصى (ساعتين)
+    // إذا كان اليوم ليس عطلة
+    if (!isOffDay && currMins < startMins - 120) {
+       await ctx.editMessageText(
+         `⚠️ *وقت مبكر جداً!*\n\nلا يمكنك تسجيل الحضور الآن.\nموعد بدء الدوام هو: *${startTime}*\n_(يمكنك تسجيل الحضور قبل الموعد بساعتين كحد أقصى)_`, 
+         { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
+       );
+       return ctx.answerCallbackQuery();
+    }
+
     // FIX BUG-03: calcLateMinutes — حساب رقمي دقيق
     // لا يتم حساب تأخير في أيام الإجازات والعطل
     const lateMinutes = isOffDay ? 0 : calcLateMinutes(time, startTime);
