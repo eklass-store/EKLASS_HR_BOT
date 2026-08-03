@@ -28,13 +28,27 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
   const bot = new Bot(env.BOT_TOKEN);
 
-  // NOTE: Proper Rate Limiting for Cloudflare Workers requires KV/D1/Durable Objects.
-  // For now, simple endpoints rely on auth tokens or internal ID validations.
+  // ── Error Handling Middleware ──
+  // MUST be registered before any handlers to catch their errors!
+  bot.use(async (ctx, next) => {
+    try {
+      await next();
+    } catch (err: any) {
+      console.error('[Bot Error]', err);
+      try {
+        if (ctx.chat) {
+          await ctx.reply(`❌ حدث خطأ داخلي في الخادم:\n<pre>${err.message || String(err)}</pre>`, { parse_mode: 'HTML' }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+  });
 
+  // Commands
   registerStartCommand(bot, env);
   registerHelpCommand(bot, env);
   registerBroadcastCommand(bot, env);
 
+  // Callbacks
   registerAttendanceCallbacks(bot, env);
   registerLeaveCallbacks(bot, env);
   registerLoanCallbacks(bot, env);
@@ -43,18 +57,7 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
   registerMessageHandler(bot, env);
 
-  bot.use(async (ctx, next) => {
-    try {
-      await next();
-    } catch (err: any) {
-      console.error('[Bot Error]', err);
-      try {
-        if (ctx.chat) {
-          await ctx.reply('❌ حدث خطأ داخلي في الخادم أثناء معالجة طلبك. يرجى المحاولة لاحقاً.').catch(() => {});
-        }
-      } catch (_) {}
-    }
-  });
+
 
   try {
     const cb = webhookCallback(bot, 'cloudflare-mod');
