@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler pages dev dashboard/dist",
     "deploy": "wrangler pages deploy"
   },
   "keywords": [],
