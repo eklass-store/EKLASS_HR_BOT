@@ -43,14 +43,17 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
   registerMessageHandler(bot, env);
 
-  bot.catch((err) => {
-    console.error('[Bot Error]', err);
+  bot.use(async (ctx, next) => {
     try {
-      const ctx = err.ctx;
-      if (ctx && ctx.chat) {
-        ctx.reply('❌ حدث خطأ غير متوقع أثناء معالجة طلبك. يرجى المحاولة لاحقاً.').catch(() => {});
-      }
-    } catch (_) {}
+      await next();
+    } catch (err: any) {
+      console.error('[Bot Error]', err);
+      try {
+        if (ctx.chat) {
+          await ctx.reply('❌ حدث خطأ داخلي في الخادم أثناء معالجة طلبك. يرجى المحاولة لاحقاً.').catch(() => {});
+        }
+      } catch (_) {}
+    }
   });
 
   try {
