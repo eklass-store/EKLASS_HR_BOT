@@ -11,6 +11,7 @@ import { registerAttendanceCallbacks } from './handlers/callbacks/attendance.cal
 import { registerLeaveCallbacks }      from './handlers/callbacks/leaves.callback';
 import { registerLoanCallbacks }       from './handlers/callbacks/loans.callback';
 import { registerSalaryCallbacks }     from './handlers/callbacks/salary.callback';
+import { registerAdminCallbacks }      from './handlers/callbacks/admin.callback';
 import { registerMessageHandler } from './handlers/messages.handler';
 
 export const handleWebhook = async (request: Request, env: Env): Promise<Response> => {
@@ -27,9 +28,8 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
   const bot = new Bot(env.BOT_TOKEN);
 
-  // NOTE BUG-K: Rate Limiter باستخدام globalThis لا يعمل في Cloudflare Workers
-  // لأن كل request معزول في context خاص ولا يشارك الذاكرة بين الطلبات
-  // لتفعيل Rate Limiting حقيقي يجب استخدام: Cloudflare Rate Limiting Rules أو KV/Durable Objects
+  // NOTE: Proper Rate Limiting for Cloudflare Workers requires KV/D1/Durable Objects.
+  // For now, simple endpoints rely on auth tokens or internal ID validations.
 
   registerStartCommand(bot, env);
   registerHelpCommand(bot, env);
@@ -39,11 +39,18 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
   registerLeaveCallbacks(bot, env);
   registerLoanCallbacks(bot, env);
   registerSalaryCallbacks(bot, env);
+  registerAdminCallbacks(bot, env);
 
   registerMessageHandler(bot, env);
 
   bot.catch((err) => {
     console.error('[Bot Error]', err);
+    try {
+      const ctx = err.ctx;
+      if (ctx && ctx.chat) {
+        ctx.reply('❌ حدث خطأ غير متوقع أثناء معالجة طلبك. يرجى المحاولة لاحقاً.').catch(() => {});
+      }
+    } catch (_) {}
   });
 
   try {
@@ -51,6 +58,7 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
     return await cb(request);
   } catch (err) {
     console.error('[Webhook Error]', err);
+    // Respond with 200 so Telegram stops retrying the same failing request
     return new Response('OK', { status: 200 });
   }
 };

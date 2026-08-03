@@ -29,8 +29,8 @@ const error = ref('')
 const telegramWidget = ref<HTMLElement | null>(null)
 
 onMounted(() => {
-  // EKLASS BOT USERNAME - replace with actual if different
-  const botUsername = 'eklass_hr_bot' 
+  // EKLASS BOT USERNAME
+  const botUsername = import.meta.env.VITE_BOT_USERNAME || 'eklass_hr_bot' 
   
   ;(window as any).onTelegramAuth = async (user: any) => {
     try {

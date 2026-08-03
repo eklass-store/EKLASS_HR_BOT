@@ -5,9 +5,9 @@ import { Env } from '../types';
 import { SignJWT, jwtVerify } from 'jose';
 import { handleAdminRoutes } from './admin';
 
-// Helper for CORS headers — BUG-C FIX: يستخدم ALLOWED_ORIGIN من env بدل *
+// Helper for CORS headers
 const getCorsHeaders = (env: Env) => ({
-  'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN ?? '*',
+  'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-KEY',
   'Vary': 'Origin',
@@ -77,7 +77,8 @@ export async function handleApiRoutes(
         return new Response(JSON.stringify({ error: 'Server misconfiguration: JWT_SECRET is missing' }), { status: 500, headers: getCorsHeaders(env) });
       }
       const secret = new TextEncoder().encode(env.JWT_SECRET);
-      const jwt = await new SignJWT({ id: telegramId, name: userData.first_name, role: 'admin' })
+      // Use internal employee ID instead of telegram_id
+      const jwt = await new SignJWT({ id: adminCheck.id, name: userData.first_name, role: 'admin' })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime('24h')
@@ -124,7 +125,7 @@ export async function handleApiRoutes(
 
   // ── POST /api/set-webhook (Requires Auth) ─────────────────────
   if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
-    const webhookUrl = `https://${url.host}`;
+    const webhookUrl = `https://${url.host}/api/webhook`;
     let apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`;
     if (env.WEBHOOK_SECRET) {
       apiUrl += `&secret_token=${env.WEBHOOK_SECRET}`;

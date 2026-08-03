@@ -10,10 +10,11 @@ import { issuePayroll, hasPayrollForMonth } from '../db/payroll.db';
 import { getTotalLateMinutes } from '../db/attendance.db';
 import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../db/loans.db';
 import { getDaysInMonth, calcLateMinutes } from '../utils/time';
+import { escapeMarkdown } from '../utils/markdown';
 
-// BUG-C FIX: يستخدم ALLOWED_ORIGIN من env بدل *
+// Helper for CORS headers
 const getCorsHeaders = (env: Env) => ({
-  'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN ?? '*',
+  'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-KEY',
   'Vary': 'Origin',
@@ -164,12 +165,14 @@ export async function handleAdminRoutes(
     let sentCount = 0;
     for (const e of employees) {
       try {
-        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+        const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: e.telegram_id, text: `📢 *تعميم إداري:*\n\n${message}`, parse_mode: 'Markdown' }),
+          body: JSON.stringify({ chat_id: e.telegram_id, text: `📢 *تعميم إداري:*\n\n${escapeMarkdown(message)}`, parse_mode: 'Markdown' }),
         });
-        sentCount++;
+        if (res.ok) {
+          sentCount++;
+        }
       } catch (_) {}
     }
     return jsonResponse({ success: true, sentCount }, 200, env);
