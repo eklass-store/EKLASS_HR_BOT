@@ -32,9 +32,9 @@ onMounted(() => {
   // EKLASS BOT USERNAME - replace with actual if different
   const botUsername = 'eklass_hr_bot' 
   
-  window.onTelegramAuth = async (user: any) => {
+  ;(window as any).onTelegramAuth = async (user: any) => {
     try {
-      const res = await fetch((import.meta.env.VITE_API_URL || 'https://hrsystem.adhamali595.workers.dev/api') + '/auth/telegram', {
+      const res = await fetch((import.meta.env.VITE_API_URL || '/api') + '/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(user)
