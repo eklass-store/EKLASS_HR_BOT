@@ -39,6 +39,10 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
   });
 
   // Commands
+  bot.command('ping', async (ctx) => {
+    await ctx.reply('🏓 البوت يعمل بنجاح والويب هوك متصل!');
+  });
+  
   registerStartCommand(bot, env);
   registerHelpCommand(bot, env);
   registerBroadcastCommand(bot, env);
