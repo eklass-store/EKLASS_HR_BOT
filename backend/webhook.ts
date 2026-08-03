@@ -22,6 +22,17 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
   if (env.WEBHOOK_SECRET) {
     const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (secretToken !== env.WEBHOOK_SECRET) {
+      // DEBUG: Send message to admin showing the mismatch
+      if (env.INITIAL_ADMIN_ID) {
+        const msg = `⚠️ *تنبيه أمني: فشل قفل الأمان!*\n\nتليجرام أرسل: \`${secretToken || 'لا شيء'}\`\nCloudflare يحتوي على: \`${env.WEBHOOK_SECRET}\`\n\nيوجد اختلاف بين الكلمتين (ربما مسافة زائدة أو حرف خاطئ)!`;
+        try {
+          await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: env.INITIAL_ADMIN_ID, text: msg, parse_mode: 'Markdown' })
+          });
+        } catch (_) {}
+      }
       return new Response('Unauthorized', { status: 401 });
     }
   }
