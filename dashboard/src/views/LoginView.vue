@@ -40,10 +40,16 @@ onMounted(() => {
         body: JSON.stringify(user)
       })
       
-      const data = await res.json()
+      let data: any = {}
+      try {
+        const text = await res.text()
+        data = text ? JSON.parse(text) : {}
+      } catch(e) {
+        data = { error: 'Invalid response from server' }
+      }
       
       if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed')
+        throw new Error(data.error || 'Authentication failed: ' + res.status)
       }
       
       authStore.setAuth(data.token, data.user)

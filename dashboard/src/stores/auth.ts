@@ -10,7 +10,14 @@ interface User {
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: sessionStorage.getItem('token') || null,
-    user: JSON.parse(sessionStorage.getItem('user') || 'null') as User | null,
+    user: (function() {
+      try {
+        const val = sessionStorage.getItem('user');
+        return val ? JSON.parse(val) : null;
+      } catch (e) {
+        return null;
+      }
+    })() as User | null,
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,
