@@ -12,7 +12,10 @@
     "vue": "latest",
     "vue-router": "latest",
     "pinia": "latest",
-    "lucide-vue-next": "latest"
+    "lucide-vue-next": "latest",
+    "exceljs": "^4.4.0",
+    "grammy": "^1.45.1",
+    "jose": "^6.2.7"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.14",
