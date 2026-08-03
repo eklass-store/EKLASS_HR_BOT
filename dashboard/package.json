@@ -21,10 +21,10 @@
     "tailwindcss": "^3.4.14",
     "postcss": "^8.4.47",
     "autoprefixer": "^10.4.20",
-    "@types/node": "^24.13.3",
+    "@types/node": "^22.0.0",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vue/tsconfig": "^0.9.1",
-    "typescript": "~6.0.2",
+    "@vue/tsconfig": "^0.5.1",
+    "typescript": "~5.6.3",
     "vite": "^8.2.0",
     "vue-tsc": "^3.3.8"
   }

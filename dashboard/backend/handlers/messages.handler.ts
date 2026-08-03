@@ -3,10 +3,6 @@
 // معالج الرسائل النصية لجميع المحادثات متعددة الخطوات:
 //   - طلب إجازة (نوع → تاريخ بداية → تاريخ نهاية → سبب)
 //   - طلب سلفة (مبلغ → سبب)
-//   - إضافة موظف (telegram_id → اسم → راتب)
-//   - تعديل راتب موظف
-//   - تعديل إعدادات الدوام
-//   - إرسال تعميم
 // ============================================================
 import { Bot, InlineKeyboard } from 'grammy';
 import { Env } from '../types';
@@ -32,6 +28,24 @@ const SETTING_NAMES: Record<string, string> = {
 };
 
 export function registerMessageHandler(bot: Bot, env: Env): void {
+  // ── Missing Callbacks ───────────────────────────────────────
+  bot.callbackQuery('back_to_main', async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
+    await ctx.editMessageText('اختر ما تريد من القائمة:', { reply_markup: getMainMenu(emp.role === 'admin') });
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery('admin_panel', async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp || emp.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+    const { getAdminMenu } = await import('../keyboards/main.keyboards');
+    await ctx.editMessageText('⚙️ *لوحة تحكم الإدارة*\n\nاختر الإجراء المطلوب:', { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
+    await ctx.answerCallbackQuery();
+  });
+
   bot.on('message:text', async (ctx) => {
     const tid  = String(ctx.from?.id);
     const text = ctx.message.text.trim();

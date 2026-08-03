@@ -92,7 +92,7 @@ const loadData = async () => {
 
 const exportPayroll = () => {
   if (!exportMonth.value) return
-  const API_BASE = import.meta.env.VITE_API_URL || 'https://hrsystem.adhamali595.workers.dev/api'
+  const API_BASE = import.meta.env.VITE_API_URL || '/api'
   // Create a temporary link to download the file directly, passing the JWT if possible
   // Since it's a direct download link, passing JWT in headers isn't natively supported by window.open.
   // Workaround: fetch as blob, then trigger download

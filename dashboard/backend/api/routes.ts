@@ -30,26 +30,19 @@ export async function handleApiRoutes(
     return null;
   }
 
-  // ── POST /api/set-webhook ─────────────────────────────────────
-  if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
-    const webhookUrl = `https://${url.host}`;
-    let apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`;
-    if (env.WEBHOOK_SECRET) {
-      apiUrl += `&secret_token=${env.WEBHOOK_SECRET}`;
-    }
-    const res = await fetch(apiUrl);
-    const data = await res.json();
-    return new Response(JSON.stringify({ setting: webhookUrl, data }), {
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    });
-  }
-
   // ── POST /api/auth/telegram ──────────────────────────────────
   if (request.method === 'POST' && url.pathname === '/api/auth/telegram') {
     try {
       const data = await request.json() as any;
       const { hash, ...userData } = data;
       
+      // Prevent Replay Attacks: Check auth_date
+      const authDate = Number(userData.auth_date);
+      const now = Math.floor(Date.now() / 1000);
+      if (!authDate || now - authDate > 86400) { // Max 24 hours old
+        return new Response(JSON.stringify({ error: 'Authentication data is expired' }), { status: 401, headers: corsHeaders });
+      }
+
       // Verify Telegram Auth Hash (HMAC-SHA256)
       const encoder = new TextEncoder();
       const secretKeyHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(env.BOT_TOKEN));
@@ -79,7 +72,10 @@ export async function handleApiRoutes(
       }
 
       // Issue JWT
-      const secret = new TextEncoder().encode(env.JWT_SECRET || env.BOT_TOKEN);
+      if (!env.JWT_SECRET) {
+        return new Response(JSON.stringify({ error: 'Server misconfiguration: JWT_SECRET is missing' }), { status: 500, headers: corsHeaders });
+      }
+      const secret = new TextEncoder().encode(env.JWT_SECRET);
       const jwt = await new SignJWT({ id: telegramId, name: userData.first_name, role: 'admin' })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
@@ -103,7 +99,8 @@ export async function handleApiRoutes(
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
-      const secret = new TextEncoder().encode(env.JWT_SECRET || env.BOT_TOKEN);
+      if (!env.JWT_SECRET) throw new Error("JWT_SECRET missing");
+      const secret = new TextEncoder().encode(env.JWT_SECRET);
       const decoded = await jwtVerify(token, secret);
       isAuthenticated = true;
       adminId = Number(decoded.payload.id || 0);
@@ -121,6 +118,20 @@ export async function handleApiRoutes(
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
       status: 401, 
       headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+    });
+  }
+
+  // ── POST /api/set-webhook (Requires Auth) ─────────────────────
+  if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
+    const webhookUrl = `https://${url.host}`;
+    let apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`;
+    if (env.WEBHOOK_SECRET) {
+      apiUrl += `&secret_token=${env.WEBHOOK_SECRET}`;
+    }
+    const res = await fetch(apiUrl);
+    const data = await res.json();
+    return new Response(JSON.stringify({ setting: webhookUrl, data }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }
 
@@ -170,7 +181,14 @@ export async function handleApiRoutes(
       ORDER BY a.date DESC, a.check_in_time DESC 
       LIMIT ?
     `).bind(Number(limit)).all();
-    return new Response(JSON.stringify(result.results), {
+    
+    // Add dynamic status (present, late)
+    const records = result.results.map((r: any) => ({
+      ...r,
+      status: r.late_minutes > 0 ? 'late' : 'present'
+    }));
+
+    return new Response(JSON.stringify(records), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }

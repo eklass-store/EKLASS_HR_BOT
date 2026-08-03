@@ -9,8 +9,8 @@ interface User {
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('token') || null,
-    user: JSON.parse(localStorage.getItem('user') || 'null') as User | null,
+    token: sessionStorage.getItem('token') || null,
+    user: JSON.parse(sessionStorage.getItem('user') || 'null') as User | null,
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,
@@ -19,14 +19,14 @@ export const useAuthStore = defineStore('auth', {
     setAuth(token: string, user: User) {
       this.token = token
       this.user = user
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
+      sessionStorage.setItem('token', token)
+      sessionStorage.setItem('user', JSON.stringify(user))
     },
     logout() {
       this.token = null
       this.user = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('user')
     }
   }
 })

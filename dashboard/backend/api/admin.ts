@@ -6,6 +6,10 @@ import { getSettings, updateSetting } from '../db/settings.db';
 import { addHoliday, removeHoliday, getHolidaysInMonth } from '../db/holidays.db';
 import { createAnnouncement } from '../db/announcements.db';
 import { logAction } from '../db/audit.db';
+import { issuePayroll, hasPayrollForMonth } from '../db/payroll.db';
+import { getTotalLateMinutes } from '../db/attendance.db';
+import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../db/loans.db';
+import { getDaysInMonth, calcLateMinutes } from '../utils/time';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -211,6 +215,53 @@ export async function handleAdminRoutes(
     await removeHoliday(env, date);
     await logAction(env, adminId, 'DELETE_HOLIDAY', `Removed holiday ${date}`);
     return jsonResponse({ success: true });
+  }
+
+  // ── Payroll ──────────────────────────────────────────────────
+  if (path === '/api/admin/payroll/issue' && method === 'POST') {
+    const { month } = await request.json() as any; // YYYY-MM
+    if (!month) return jsonResponse({ error: 'Month is required' }, 400);
+
+    const settings = await getSettings(env);
+    const startTime = settings['work_start_time'] ?? '09:00';
+    const endTime = settings['work_end_time'] ?? '17:00';
+    
+    // إجمالي دقائق العمل في اليوم
+    const workMinutes = calcLateMinutes(endTime, startTime) || 480; 
+    const daysInMonth = getDaysInMonth(month);
+
+    const employees = await getAllEmployees(env);
+    let issuedCount = 0;
+    let skippedCount = 0;
+
+    for (const employee of employees) {
+      if (await hasPayrollForMonth(env, employee.id, month)) {
+        skippedCount++;
+        continue;
+      }
+
+      const baseSalary = employee.base_salary;
+      const dailyRate = baseSalary / 30;
+      const dynamicMonthSalary = dailyRate * daysInMonth;
+      const minuteRate = dailyRate / workMinutes;
+
+      const lateMinutes   = await getTotalLateMinutes(env, employee.id, month);
+      const lateDeduction = lateMinutes * minuteRate;
+      const activeLoan    = await getTotalActiveLoan(env, employee.id);
+      
+      const totalDed      = lateDeduction + activeLoan;
+      const netSalary     = Math.max(0, dynamicMonthSalary - totalDed);
+
+      await issuePayroll(env, employee.id, month, dynamicMonthSalary, totalDed, netSalary);
+      
+      if (activeLoan > 0) {
+        await markEmployeeLoansAsPaid(env, employee.id);
+      }
+      issuedCount++;
+    }
+
+    await logAction(env, adminId, 'ISSUE_PAYROLL', `Issued payroll for ${month} (${issuedCount} issued)`);
+    return jsonResponse({ success: true, issuedCount, skippedCount });
   }
 
   return null;

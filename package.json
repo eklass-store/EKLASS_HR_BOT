@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler pages deploy"
   },
   "keywords": [],
   "author": "",
@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260801.1",
-    "typescript": "^7.0.2",
+    "typescript": "~5.6.3",
     "wrangler": "^4.118.0"
   }
 }
