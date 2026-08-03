@@ -21,7 +21,8 @@ export function getMainMenu(isAdmin: boolean): InlineKeyboard {
     .text('💸 طلب سلفة',      'action_loan').row()
     .text('📋 سجل الحضور',    'action_history')
     .text('💰 راتبي',          'action_salary').row()
-    .text('🏷️ إجازاتي',       'action_leaves');
+    .text('🏷️ إجازاتي',       'action_leaves')
+    .text('💳 سلفي',          'action_loans');
 
   if (isAdmin) {
     kb.text('⚙️ لوحة الإدارة', 'admin_panel').row();
@@ -40,6 +41,7 @@ export function getAdminMenu(): InlineKeyboard {
     .text('📈 تقرير اليوم',     'admin_report_today').row()
     .text('⚙️ إعدادات الدوام', 'admin_settings')
     .text('🔍 سجل التدقيق',    'admin_audit_logs').row()
+    .text('🏖️ إدارة العطلات',  'admin_holidays').row()
     .text('🔙 القائمة الرئيسية', 'back_to_main').row();
 }
 

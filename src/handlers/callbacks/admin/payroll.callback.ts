@@ -52,6 +52,20 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
     const workMinutes = calcLateMinutes(endTime, startTime) || 480; // 8 hours default if 0
     
     const daysInMonth = getDaysInMonth(month);
+    
+    const { getHolidaysInMonth } = await import('../../../db/holidays.db');
+    const { isWeekend } = await import('../../../utils/time');
+    const holidays = await getHolidaysInMonth(env, month);
+    const holidayDates = new Set(holidays.map((h: any) => h.holiday_date));
+    
+    let workingDays = 0;
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dStr = `${month}-${i.toString().padStart(2, '0')}`;
+      if (!isWeekend(dStr) && !holidayDates.has(dStr)) {
+        workingDays++;
+      }
+    }
+    workingDays = workingDays > 0 ? workingDays : 1;
 
     const employees = await getAllEmployees(env);
     let issuedCount = 0;
@@ -67,7 +81,7 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
 
       // الحساب بناء على الراتب الأساسي الثابت
       const baseSalary = employee.base_salary;
-      const dailyRate = baseSalary / 30; // بناء على شهر 30 يوم قياسي لحساب الخصومات
+      const dailyRate = baseSalary / workingDays; // بناء على أيام العمل الفعلية
       const minuteRate = dailyRate / workMinutes; // أجر الدقيقة للخصم
 
       const lateMinutes   = await getTotalLateMinutes(env, employee.id, month);
@@ -146,20 +160,43 @@ export function registerAdminPayrollCallbacks(bot: Bot, env: Env): void {
     } else {
       await ctx.editMessageText(headerMsg, {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text('🔄 تراجع عن إصدار الرواتب', `admin_payroll_undo_${month}`).row().text('🔙 رجوع', 'admin_panel'),
+        reply_markup: new InlineKeyboard().text('🔙 رجوع', 'admin_panel'),
       });
     }
     
     await ctx.answerCallbackQuery();
   });
 
-  // ── تراجع عن إصدار رواتب الشهر ─────────────────────────────
+  // ── تراجع عن إصدار رواتب الشهر (تأكيد) ───────────────────
   bot.callbackQuery(/^admin_payroll_undo_\d{4}-\d{2}$/, async (ctx) => {
     const tid = String(ctx.from?.id);
     const admin = await getEmployeeByTelegramId(env, tid);
     if (!admin || admin.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
 
     const month = ctx.callbackQuery.data.replace('admin_payroll_undo_', '');
+    
+    const kb = new InlineKeyboard()
+      .text('✅ نعم، امسح كل رواتب الشهر', `confirm_admin_payroll_undo_${month}`).row()
+      .text('❌ لا، تراجع', 'admin_panel');
+
+    await ctx.editMessageText(
+      `⚠️ *تأكيد مسح رواتب ${month}*\n\nهل أنت متأكد من مسح **جميع** الرواتب المصدرة لهذا الشهر والتراجع عنها؟\nهذا سيعيد السلف المدفوعة لحالتها المعتمدة ويمسح السلف المرحلة.`,
+      { parse_mode: 'Markdown', reply_markup: kb }
+    );
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── التأكيد الفعلي ─────────────────────────────────────────
+  bot.callbackQuery(/^confirm_admin_payroll_undo_\d{4}-\d{2}$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const admin = await getEmployeeByTelegramId(env, tid);
+    if (!admin || admin.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
+
+    const month = ctx.callbackQuery.data.replace('confirm_admin_payroll_undo_', '');
+    
+    // إرجاع حالة السلف
+    await env.DB.prepare("DELETE FROM Loans WHERE reason = 'باقي سلفة سابقة مرحلة' AND status = 'approved'").run();
+    await env.DB.prepare("UPDATE Loans SET status = 'approved' WHERE status = 'paid'").run();
     
     await env.DB.prepare("DELETE FROM Payroll WHERE month = ?").bind(month).run();
     await logAction(env, admin.id, 'UNDO_PAYROLL', `تم إلغاء إصدار رواتب شهر ${month}`);

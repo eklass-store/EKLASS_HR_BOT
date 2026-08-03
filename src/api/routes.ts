@@ -3,7 +3,7 @@
 // ============================================================
 import { Env } from '../types';
 
-const apiRateLimit = new Map<string, { count: number; timestamp: number }>();
+
 
 export async function handleApiRoutes(
   request: Request,
@@ -12,30 +12,34 @@ export async function handleApiRoutes(
   const url = new URL(request.url);
 
   if (url.pathname.startsWith('/api/')) {
-    // ── Rate Limiting (In-Memory) ──
+    // ── Rate Limiting (D1) ──
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
     const now = Date.now();
-    const record = apiRateLimit.get(ip) || { count: 0, timestamp: now };
     
-    if (now - record.timestamp > 60000) {
-      record.count = 0;
-      record.timestamp = now;
+    try {
+      const record = await env.DB.prepare("SELECT last_request_time, request_count FROM RateLimits WHERE telegram_id = ?").bind(`ip_${ip}`).first() as any;
+      if (!record) {
+        await env.DB.prepare("INSERT INTO RateLimits (telegram_id, last_request_time, request_count) VALUES (?, ?, 1)").bind(`ip_${ip}`, now).run();
+      } else {
+        if (now - record.last_request_time < 60000) {
+          if (record.request_count >= 20) {
+            return new Response('Rate limit exceeded', { status: 429 });
+          }
+          await env.DB.prepare("UPDATE RateLimits SET request_count = request_count + 1 WHERE telegram_id = ?").bind(`ip_${ip}`).run();
+        } else {
+          await env.DB.prepare("UPDATE RateLimits SET last_request_time = ?, request_count = 1 WHERE telegram_id = ?").bind(now, `ip_${ip}`).run();
+        }
+      }
+    } catch (err) {
+      // ignore
     }
-    
-    if (record.count >= 20) { // Max 20 requests per minute per IP
-      return new Response('Rate limit exceeded', { status: 429 });
-    }
-    
-    record.count++;
-    apiRateLimit.set(ip, record);
 
     // Secure API routes
     const apiKeyHeader = request.headers.get('X-API-KEY');
-    const apiKeyQuery = url.searchParams.get('api_key');
-    const providedKey = apiKeyHeader || apiKeyQuery;
-
-    if (!env.API_KEY || providedKey !== env.API_KEY) {
-      return new Response('Unauthorized: Invalid or missing API key', { status: 401 });
+    
+    // We only allow API key via header for security, not in query string
+    if (!env.API_KEY || apiKeyHeader !== env.API_KEY) {
+      return new Response('Unauthorized: Invalid or missing API key in X-API-KEY header', { status: 401 });
     }
   }
 
@@ -94,8 +98,8 @@ export async function handleApiRoutes(
     });
   }
 
-  // ── GET /api/set-webhook ─────────────────────────────────────
-  if (request.method === 'GET' && url.pathname === '/api/set-webhook') {
+  // ── POST /api/set-webhook ─────────────────────────────────────
+  if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
     const webhookUrl = `https://${url.host}`;
     const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${webhookUrl}`);
     const data = await res.json();

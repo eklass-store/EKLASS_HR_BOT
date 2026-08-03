@@ -2,7 +2,7 @@
 // src/handlers/callbacks/leaves.callback.ts
 // FIX BUG-07: إشعار الموظف عند قبول/رفض الإجازة
 // ============================================================
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import { Env } from '../../types';
 import { getEmployeeByTelegramId, getAdmins, getEmployeeById } from '../../db/employees.db';
 import {
@@ -114,9 +114,32 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
       return ctx.answerCallbackQuery('لا يمكن إلغاء الطلب لأنه تمت معالجته بالفعل.');
     }
 
+    const kb = new InlineKeyboard()
+      .text('✅ نعم، متأكد', `confirm_cancel_leave_${leaveId}`).row()
+      .text('❌ لا، تراجع', 'action_leaves');
+
+    await ctx.editMessageText(`❓ هل أنت متأكد من إلغاء طلب الإجازة (${leave.start_date})؟`, {
+      reply_markup: kb
+    });
+    await ctx.answerCallbackQuery();
+  });
+
+  // ── التأكيد الفعلي لإلغاء الإجازة ─────────────────────────
+  bot.callbackQuery(/^confirm_cancel_leave_\d+$/, async (ctx) => {
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
+
+    const leaveId = parseInt(ctx.callbackQuery.data.split('_').at(-1)!);
+    const leave = await getLeaveById(env, leaveId);
+
+    if (!leave || leave.employee_id !== emp.id || leave.status !== 'pending') {
+      return ctx.answerCallbackQuery('عذراً، الطلب غير متاح.');
+    }
+
     await env.DB.prepare("DELETE FROM Leaves WHERE id = ?").bind(leaveId).run();
     
-    await ctx.editMessageText(`✅ تم سحب/إلغاء طلب الإجازة (${leave.start_date}) بنجاح.`, {
+    await ctx.editMessageText(`✅ تم إلغاء طلب الإجازة (${leave.start_date}) بنجاح.`, {
       reply_markup: getMainMenu(emp.role === 'admin')
     });
     await ctx.answerCallbackQuery();

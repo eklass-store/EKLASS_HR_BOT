@@ -25,6 +25,7 @@ import { registerAdminEmployeeCallbacks }  from './handlers/callbacks/admin/empl
 import { registerAdminPayrollCallbacks }   from './handlers/callbacks/admin/payroll.callback';
 import { registerAdminReportCallbacks }    from './handlers/callbacks/admin/reports.callback';
 import { registerAdminSettingsCallbacks }  from './handlers/callbacks/admin/settings.callback';
+import { registerAdminHolidaysCallbacks }  from './handlers/callbacks/admin/holidays.callback';
 
 // Message Handler (multi-step conversations)
 import { registerMessageHandler } from './handlers/messages.handler';
@@ -94,6 +95,7 @@ export default {
     registerAdminPayrollCallbacks(bot, env);
     registerAdminReportCallbacks(bot, env);
     registerAdminSettingsCallbacks(bot, env);
+    registerAdminHolidaysCallbacks(bot, env);
 
     registerMessageHandler(bot, env);
 

@@ -48,20 +48,7 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
       }
     }
 
-    const pendingLoans = await env.DB.prepare(
-      "SELECT id, amount, created_at FROM Loans WHERE employee_id = ? AND status = 'pending'"
-    ).bind(emp.id).all();
-
     const kb = new InlineKeyboard();
-
-    if (pendingLoans.results.length > 0) {
-      text += `\n⏳ *طلبات سلف قيد الانتظار:*\n`;
-      for (const pl of pendingLoans.results as any[]) {
-        text += `• مبلغ ${pl.amount} جنيه (${pl.created_at})\n`;
-        kb.text(`🗑️ إلغاء السلفة (${pl.amount}ج)`, `cancel_my_loan_${pl.id}`).row();
-      }
-    }
-
     if (emp.role === 'admin') {
       kb.text('⚙️ لوحة الإدارة', 'admin_panel').row();
     }
@@ -74,26 +61,4 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
     await ctx.answerCallbackQuery();
   });
 
-  bot.callbackQuery(/^cancel_my_loan_\d+$/, async (ctx) => {
-    const tid = String(ctx.from?.id);
-    const emp = await getEmployeeByTelegramId(env, tid);
-    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
-
-    const loanId = parseInt(ctx.callbackQuery.data.split('_').at(-1)!);
-    const loan = await env.DB.prepare("SELECT * FROM Loans WHERE id = ?").bind(loanId).first() as any;
-
-    if (!loan || loan.employee_id !== emp.id) {
-      return ctx.answerCallbackQuery('الطلب غير موجود أو لا تملكه!');
-    }
-    if (loan.status !== 'pending') {
-      return ctx.answerCallbackQuery('لا يمكن إلغاء الطلب لأنه تمت معالجته بالفعل.');
-    }
-
-    await env.DB.prepare("DELETE FROM Loans WHERE id = ?").bind(loanId).run();
-    
-    await ctx.editMessageText(`✅ تم سحب/إلغاء طلب السلفة بمبلغ (${loan.amount} جنيه) بنجاح.`, {
-      reply_markup: getMainMenu(emp.role === 'admin')
-    });
-    await ctx.answerCallbackQuery();
-  });
 }

@@ -410,5 +410,30 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         reply_markup: kb
       });
     }
+
+    // ──────────────────────────────────────────────────────────
+    // ⓭ [ADMIN] إضافة عطلة — التاريخ
+    // ──────────────────────────────────────────────────────────
+    if (state === 'admin_awaiting_holiday_date') {
+      if (!emp || emp.role !== 'admin') { await clearState(env, tid); return; }
+
+      if (!isValidDate(text)) {
+        return ctx.reply('⚠️ صيغة التاريخ غير صحيحة.\nاستخدم: YYYY-MM-DD\nمثال: 2024-08-15');
+      }
+
+      const { addHoliday } = await import('../db/holidays.db');
+      try {
+        await addHoliday(env, text, 'عطلة مضافة من الإدارة');
+        await clearState(env, tid);
+        return ctx.reply(`✅ تم إضافة العطلة (${text}) بنجاح.`, {
+          reply_markup: new InlineKeyboard().text('🔙 رجوع للعطلات', 'admin_holidays')
+        });
+      } catch (e: any) {
+        if (e.message.includes('UNIQUE constraint failed')) {
+          return ctx.reply('⚠️ هذا اليوم مضاف مسبقاً كعطلة.');
+        }
+        return ctx.reply('⚠️ حدث خطأ أثناء الإضافة.');
+      }
+    }
   });
 }

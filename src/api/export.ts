@@ -75,7 +75,7 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
       base_salary: row.base_salary,
       total_deductions: row.total_deductions ?? 0,
       net_salary: row.net_salary ?? row.base_salary,
-      payroll_status: row.payroll_status === 'paid' ? 'تم الدفع' : (row.payroll_status ? 'معلق' : 'لم يصدر')
+      payroll_status: row.payroll_status === 'issued' ? 'تم الدفع' : (row.payroll_status ? 'معلق' : 'لم يصدر')
     });
   }
 

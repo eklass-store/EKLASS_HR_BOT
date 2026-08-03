@@ -9,10 +9,11 @@ export async function getEmployeeByTelegramId(env: Env, telegramId: string): Pro
   ).bind(telegramId).first() as Employee | null;
 }
 
-export async function getEmployeeById(env: Env, id: number): Promise<Employee | null> {
-  return await env.DB.prepare(
-    "SELECT * FROM Employees WHERE id = ? AND is_active = 1"
-  ).bind(id).first() as Employee | null;
+export async function getEmployeeById(env: Env, id: number, includeInactive: boolean = false): Promise<Employee | null> {
+  const query = includeInactive 
+    ? "SELECT * FROM Employees WHERE id = ?"
+    : "SELECT * FROM Employees WHERE id = ? AND is_active = 1";
+  return await env.DB.prepare(query).bind(id).first() as Employee | null;
 }
 
 export async function getAllEmployees(env: Env): Promise<Employee[]> {

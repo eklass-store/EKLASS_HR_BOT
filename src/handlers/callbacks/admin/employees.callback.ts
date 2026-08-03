@@ -225,7 +225,7 @@ export function registerAdminEmployeeCallbacks(bot: Bot, env: Env): void {
 
     await setState(env, tid, 'admin_awaiting_emp_telegram_id');
     await ctx.editMessageText(
-      '➕ *إضافة موظف جديد*\n\n*الخطوة 1/3* — أرسل الـ Telegram ID للموظف:\n_(الموظف يعرف ID الخاص به من @userinfobot)_',
+      '➕ *إضافة موظف جديد*\n\n*الخطوة 1/4* — أرسل الـ Telegram ID للموظف:\n_(الموظف يعرف ID الخاص به من @userinfobot)_',
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCallbackQuery();

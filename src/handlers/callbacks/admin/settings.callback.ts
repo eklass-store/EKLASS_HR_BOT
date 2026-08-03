@@ -45,7 +45,7 @@ export function registerAdminSettingsCallbacks(bot: Bot, env: Env): void {
     await setState(env, tid, 'admin_awaiting_setting', { key: 'work_start_time' });
     await ctx.editMessageText(
       '⏰ أرسل وقت *بداية* الدوام الجديد:\nالصيغة: HH:MM\nمثال: `08:30`',
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
     );
     await ctx.answerCallbackQuery();
   });
@@ -59,7 +59,7 @@ export function registerAdminSettingsCallbacks(bot: Bot, env: Env): void {
     await setState(env, tid, 'admin_awaiting_setting', { key: 'work_end_time' });
     await ctx.editMessageText(
       '⏰ أرسل وقت *انتهاء* الدوام الجديد:\nالصيغة: HH:MM\nمثال: `17:00`',
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
     );
     await ctx.answerCallbackQuery();
   });
@@ -73,7 +73,7 @@ export function registerAdminSettingsCallbacks(bot: Bot, env: Env): void {
     await setState(env, tid, 'admin_awaiting_setting', { key: 'late_deduction_per_minute' });
     await ctx.editMessageText(
       '💸 أرسل مقدار الخصم لكل دقيقة تأخير (بالجنيه):\nمثال: `2.5`\n_(0 = لا خصم)_',
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('🔙 إلغاء', 'cancel_action') }
     );
     await ctx.answerCallbackQuery();
   });

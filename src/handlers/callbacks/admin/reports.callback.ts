@@ -19,6 +19,19 @@ export function registerAdminReportCallbacks(bot: Bot, env: Env): void {
     if (!emp || emp.role !== 'admin') return ctx.answerCallbackQuery('غير مصرح لك!');
 
     const { date } = getNow(env.TIMEZONE);
+    const { isWeekend } = await import('../../../utils/time');
+    const { getHolidaysInMonth } = await import('../../../db/holidays.db');
+    const month = date.substring(0, 7);
+    const holidays = await getHolidaysInMonth(env, month);
+    
+    if (isWeekend(date) || holidays.some((h: any) => h.holiday_date === date)) {
+      await ctx.editMessageText(`📅 *تقرير الحضور — ${date}*\n\nاليوم عطلة رسمية أو عطلة نهاية أسبوع.\nلا يوجد حضور وانصراف.`, {
+        parse_mode: 'Markdown',
+        reply_markup: getAdminMenu(),
+      });
+      return ctx.answerCallbackQuery();
+    }
+
     const records = await getDailyReport(env, date);
 
     if (records.length === 0) {
