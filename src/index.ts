@@ -42,9 +42,15 @@ export default {
     const apiResponse = await handleApiRoutes(request, env);
     if (apiResponse) return apiResponse;
 
-    // ── 2. Health check (GET /) ────────────────────────────────
+    // ── 2. Handle Frontend (SPA) or Webhook ────────────────────
     if (request.method !== 'POST') {
-      return new Response('🤖 EKLASS HR Bot is running!', { status: 200 });
+      try {
+        const url = new URL(request.url);
+        url.pathname = '/index.html';
+        return await env.ASSETS.fetch(new Request(url.toString(), request));
+      } catch (err) {
+        return new Response('EKLASS HR Bot is running! (Frontend missing)', { status: 200 });
+      }
     }
 
     // ── 3. Telegram Webhook (POST) ─────────────────────────────

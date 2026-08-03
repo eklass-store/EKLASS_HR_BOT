@@ -4,8 +4,10 @@
 
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
   BOT_TOKEN: string;
   WEBHOOK_SECRET?: string; // Secure webhook token
+  JWT_SECRET: string;
   TIMEZONE?: string; // e.g. 'Africa/Cairo', 'Asia/Riyadh'
   API_KEY?: string;
   INITIAL_ADMIN_ID?: string;
