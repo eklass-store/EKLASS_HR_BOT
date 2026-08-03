@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "cd dashboard && npm install && npm run build",
     "dev": "wrangler pages dev dashboard/dist",
     "deploy": "wrangler pages deploy"
   },
