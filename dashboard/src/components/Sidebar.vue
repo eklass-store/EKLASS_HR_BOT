@@ -36,8 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import { Users, FileText, DollarSign, Radio, Settings, BarChart2 } from 'lucide-vue-next'
+import { Users, FileText, DollarSign, Settings, BarChart2, Radio } from 'lucide-vue-next'
 
 const props = defineProps<{
   isOpen: boolean
@@ -46,8 +45,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
-
-const route = useRoute()
 
 const navigation = [
   { name: 'الموظفين', to: '/', routeName: 'employees', icon: Users },

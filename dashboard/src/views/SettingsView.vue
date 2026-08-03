@@ -1,80 +1,29 @@
 <template>
   <div class="space-y-8">
     <div>
-      <h3 class="text-lg font-medium leading-6 text-gray-900">System Settings</h3>
-      <p class="mt-1 text-sm text-gray-500">Manage work hours, deductions, and official holidays.</p>
-    </div>
-
-    <!-- General Settings -->
-    <div class="bg-white shadow-sm rounded-xl border border-gray-100 p-6 max-w-3xl">
-      <h4 class="text-md font-medium text-gray-900 mb-4">Work Rules</h4>
-      
-      <div v-if="loading" class="text-sm text-gray-500">Loading...</div>
-      
-      <div v-else class="space-y-4">
-        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
-          <div>
-            <label class="block text-sm font-medium text-gray-700">Work Start Time</label>
-            <div class="mt-1 flex rounded-md shadow-sm">
-              <input type="time" v-model="settings.work_start_time" class="flex-1 min-w-0 block w-full px-3 py-2 rounded-md sm:text-sm border-gray-300 border focus:ring-black focus:border-black">
-              <button @click="updateSetting('work_start_time', settings.work_start_time)" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-black hover:bg-gray-800">Save</button>
-            </div>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700">Work End Time</label>
-            <div class="mt-1 flex rounded-md shadow-sm">
-              <input type="time" v-model="settings.work_end_time" class="flex-1 min-w-0 block w-full px-3 py-2 rounded-md sm:text-sm border-gray-300 border focus:ring-black focus:border-black">
-              <button @click="updateSetting('work_end_time', settings.work_end_time)" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-black hover:bg-gray-800">Save</button>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700">Late Deduction (Per Minute)</label>
-            <div class="mt-1 flex rounded-md shadow-sm">
-              <input type="number" step="0.1" v-model="settings.late_deduction_per_minute" class="flex-1 min-w-0 block w-full px-3 py-2 rounded-md sm:text-sm border-gray-300 border focus:ring-black focus:border-black">
-              <button @click="updateSetting('late_deduction_per_minute', settings.late_deduction_per_minute)" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-black hover:bg-gray-800">Save</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <h3 class="text-xl font-bold leading-6 text-gray-900">إعدادات النظام</h3>
+      <p class="mt-1 text-sm text-gray-500">إدارة الإعدادات العامة للعطلات الرسمية وأوقات العمل وتذكيرات النظام.</p>
     </div>
 
     <!-- Holidays -->
-    <div class="bg-white shadow-sm rounded-xl border border-gray-100 overflow-hidden max-w-3xl">
-      <div class="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-        <h3 class="text-lg leading-6 font-medium text-gray-900">Official Holidays</h3>
+    <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-6 py-5 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-lg leading-6 font-bold text-gray-900">العطلات الرسمية</h3>
+        <button @click="showAddHolidayModal = true" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+          إضافة عطلة
+        </button>
       </div>
       
-      <div class="p-4 border-b border-gray-100 bg-white">
-        <form @submit.prevent="addHoliday" class="flex space-x-4 items-end">
-          <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-            <input type="date" v-model="newHoliday.date" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-black focus:border-black sm:text-sm">
-          </div>
-          <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <input type="text" v-model="newHoliday.description" placeholder="e.g. Eid, National Day" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-black focus:border-black sm:text-sm">
-          </div>
-          <div>
-            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-black hover:bg-gray-800">
-              Add Holiday
-            </button>
-          </div>
-        </form>
-      </div>
-
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+          <thead class="bg-white">
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">اسم العطلة</th>
+              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">التاريخ</th>
+              <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">الإجراءات</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-if="holidays.length === 0">
             <tr v-if="loading" class="animate-pulse">
               <td colspan="3" class="px-6 py-8 text-center text-sm text-gray-500">جاري التحميل...</td>
             </tr>
