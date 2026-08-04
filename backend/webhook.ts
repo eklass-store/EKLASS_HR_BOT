@@ -32,7 +32,7 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
       console.error('[Bot Error]', err);
       try {
         if (ctx.chat) {
-          await ctx.reply(`❌ حدث خطأ داخلي في الخادم:\n<pre>${err.message || String(err)}</pre>`, { parse_mode: 'HTML' }).catch(() => {});
+          await ctx.reply(`❌ حدث خطأ داخلي في الخادم. يرجى المحاولة لاحقاً.`, { parse_mode: 'HTML' }).catch(() => {});
         }
       } catch (_) {}
     }

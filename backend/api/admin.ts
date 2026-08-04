@@ -68,12 +68,13 @@ export async function handleAdminRoutes(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: emp.telegram_id,
-        text: `📩 *رسالة من الإدارة:*\n\n${data.message}`,
+        text: `📩 *رسالة من الإدارة:*\n\n${escapeMarkdown(data.message)}`,
         parse_mode: 'Markdown'
       })
     });
     
     if (!res.ok) return jsonResponse({ error: 'Failed to send message via Telegram' }, 500, env);
+    await logAction(env, adminId, 'SEND_MESSAGE', `Sent message to employee ID ${empId}`);
     return jsonResponse({ success: true }, 200, env);
   }
 
@@ -121,12 +122,16 @@ export async function handleAdminRoutes(
   // ── Departments ──────────────────────────────────────────────
   if (path === '/api/admin/departments') {
     if (method === 'POST') {
-      const data = await request.json() as any;
-      if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
-      const { addDepartment } = await import('../db/departments.db');
-      const id = await addDepartment(env, data.name, data.manager_id || null);
-      await logAction(env, adminId, 'ADD_DEPARTMENT', `Added department ${data.name}`);
-      return jsonResponse({ success: true, id }, 200, env);
+      try {
+        const data = await request.json() as any;
+        if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
+        const { addDepartment } = await import('../db/departments.db');
+        const id = await addDepartment(env, data.name, data.manager_id || null);
+        await logAction(env, adminId, 'ADD_DEPARTMENT', `Added department ${data.name}`);
+        return jsonResponse({ success: true, id }, 200, env);
+      } catch (err: any) {
+        return jsonResponse({ error: err.message }, 500, env);
+      }
     }
   }
 
@@ -134,12 +139,16 @@ export async function handleAdminRoutes(
   if (deptMatch) {
     const deptId = parseInt(deptMatch[1]);
     if (method === 'PUT') {
-      const data = await request.json() as any;
-      if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
-      const { updateDepartment } = await import('../db/departments.db');
-      await updateDepartment(env, deptId, data.name, data.manager_id || null);
-      await logAction(env, adminId, 'UPDATE_DEPARTMENT', `Updated department ID ${deptId}`);
-      return jsonResponse({ success: true }, 200, env);
+      try {
+        const data = await request.json() as any;
+        if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
+        const { updateDepartment } = await import('../db/departments.db');
+        await updateDepartment(env, deptId, data.name, data.manager_id || null);
+        await logAction(env, adminId, 'UPDATE_DEPARTMENT', `Updated department ID ${deptId}`);
+        return jsonResponse({ success: true }, 200, env);
+      } catch (err: any) {
+        return jsonResponse({ error: err.message }, 500, env);
+      }
     }
     if (method === 'DELETE') {
       const { deleteDepartment } = await import('../db/departments.db');
@@ -292,6 +301,18 @@ export async function handleAdminRoutes(
     await removeHoliday(env, date);
     await logAction(env, adminId, 'DELETE_HOLIDAY', `Removed holiday ${date}`);
     return jsonResponse({ success: true }, 200, env);
+  }
+
+  // ── Audit Logs ──────────────────────────────────────────────
+  if (path === '/api/admin/audit-logs' && method === 'GET') {
+    const res = await env.DB.prepare(`
+      SELECT a.*, e.full_name as admin_name 
+      FROM AuditLogs a 
+      LEFT JOIN Employees e ON a.admin_id = e.id 
+      ORDER BY a.created_at DESC 
+      LIMIT 100
+    `).all();
+    return jsonResponse(res.results, 200, env);
   }
 
   // ── Payroll ──────────────────────────────────────────────────

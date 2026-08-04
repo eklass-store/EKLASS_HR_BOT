@@ -150,6 +150,7 @@ const allLeaves = ref<any[]>([])
 const allLoans = ref<any[]>([])
 const employees = ref<any[]>([])
 const departments = ref<any[]>([])
+const allAttendance = ref<any[]>([])
 
 
 const activeEmployees = ref(0)
@@ -157,11 +158,28 @@ const approvedLeaves = ref(0)
 const totalLoansAmount = ref(0)
 const totalLateMinutes = ref(0)
 
-const handleFilter = (f: any) => {
+const fetchAttendance = async () => {
+  try {
+    let url = '/attendance?limit=300';
+    if (selectedStartDate.value && selectedEndDate.value) {
+      url = `/attendance?startDate=${selectedStartDate.value}&endDate=${selectedEndDate.value}`
+    }
+    const attRes = await apiFetch(url);
+    allAttendance.value = attRes;
+  } catch(err) {
+    console.error(err)
+  }
+}
+
+const handleFilter = async (f: any) => {
   selectedStartDate.value = f.startDate || ''
   selectedEndDate.value = f.endDate || ''
   selectedDepartment.value = f.departmentId || ''
+  
+  loading.value = true
+  await fetchAttendance()
   processData()
+  loading.value = false
 }
 
 // Chart Refs
@@ -215,11 +233,7 @@ const loadData = async () => {
     employees.value = empRes
     departments.value = deptRes
     
-    // Fetch attendance (combining from employees for simplicity, or we should fetch all attendance)
-    // Since we don't have a direct /admin/attendance endpoint yet, let's extract it from employees if they include it.
-    // Wait, the API doesn't return full attendance in /employees, only in /admin/employees/:id.
-    // Let's create an aggregate or just use dummy data for line chart if attendance isn't available globally, 
-    // BUT we can use the employees list to build the Departments & Salaries chart!
+    await fetchAttendance()
     
     processData()
   } catch (err) {
@@ -303,14 +317,31 @@ const processData = () => {
     ]
   }
 
-  // -- 4. Attendance Late Minutes Line Chart (Mock data for display since global attendance endpoint doesn't exist yet)
-  // We'll generate a realistic-looking line chart based on active employees count.
-  const days = Array.from({ length: 14 }, (_, i) => `${i + 1} مايو`)
-  const lateData = days.map(() => Math.floor(Math.random() * (activeEmployees.value * 10)))
-  totalLateMinutes.value = lateData.reduce((a, b) => a + b, 0)
+  // -- 4. Attendance Late Minutes Line Chart 
+  let filteredAttendance = allAttendance.value.filter(a => empIds.has(a.employee_id))
+  
+  if (selectedStartDate.value && selectedEndDate.value) {
+    filteredAttendance = filteredAttendance.filter(a => a.date >= selectedStartDate.value && a.date <= selectedEndDate.value)
+  }
+
+  const lateByDate: Record<string, number> = {}
+  
+  filteredAttendance.forEach(a => {
+    const d = a.date
+    if (!lateByDate[d]) lateByDate[d] = 0
+    lateByDate[d] += (Number(a.late_minutes) || 0)
+  })
+  
+  const sortedDates = Object.keys(lateByDate).sort()
+  const lateData = sortedDates.map(d => lateByDate[d])
+  
+  totalLateMinutes.value = lateData.reduce((sum, val) => sum + val, 0)
   
   attendanceChartData.value = {
-    labels: days,
+    labels: sortedDates.map(d => {
+      const dt = new Date(d);
+      return `${dt.getDate()} ${dt.toLocaleDateString('ar-EG', { month: 'short' })}`
+    }),
     datasets: [{
       label: 'دقائق التأخير',
       borderColor: '#4f46e5',

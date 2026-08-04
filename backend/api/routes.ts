@@ -226,13 +226,27 @@ export async function handleApiRoutes(
   // ── GET /api/attendance ─────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/attendance') {
     const limit = url.searchParams.get('limit') || '50';
-    const result = await env.DB.prepare(`
-      SELECT a.*, e.full_name 
-      FROM Attendance a 
-      JOIN Employees e ON a.employee_id = e.id 
-      ORDER BY a.date DESC, a.check_in_time DESC 
-      LIMIT ?
-    `).bind(Number(limit)).all();
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    
+    let result;
+    if (startDate && endDate) {
+      result = await env.DB.prepare(`
+        SELECT a.*, e.full_name, e.department_id
+        FROM Attendance a 
+        JOIN Employees e ON a.employee_id = e.id 
+        WHERE a.date >= ? AND a.date <= ?
+        ORDER BY a.date ASC, a.check_in_time ASC
+      `).bind(startDate, endDate).all();
+    } else {
+      result = await env.DB.prepare(`
+        SELECT a.*, e.full_name, e.department_id
+        FROM Attendance a 
+        JOIN Employees e ON a.employee_id = e.id 
+        ORDER BY a.date DESC, a.check_in_time DESC 
+        LIMIT ?
+      `).bind(Number(limit)).all();
+    }
     
     // Add dynamic status (present, late)
     const records = result.results.map((r: any) => ({
@@ -250,7 +264,10 @@ export async function handleApiRoutes(
     const { exportEmployeesExcel } = await import('./export');
     const res = await exportEmployeesExcel(env);
     const newRes = new Response(res.body, res);
-    newRes.headers.set('Access-Control-Allow-Origin', '*');
+    const corsHeaders = getCorsHeaders(env);
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      newRes.headers.set(key, value);
+    }
     return newRes;
   }
 
@@ -263,7 +280,10 @@ export async function handleApiRoutes(
     const { exportMonthlyReport } = await import('./export');
     const res = await exportMonthlyReport(env, month);
     const newRes = new Response(res.body, res);
-    newRes.headers.set('Access-Control-Allow-Origin', '*');
+    const corsHeaders = getCorsHeaders(env);
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      newRes.headers.set(key, value);
+    }
     return newRes;
   }
 
@@ -271,13 +291,17 @@ export async function handleApiRoutes(
   if (request.method === 'GET' && url.pathname === '/api/export/comprehensive') {
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
-    if (!startDate || !endDate) {
-      return new Response('Invalid date parameters. Both startDate and endDate are required', { status: 400, headers: getCorsHeaders(env) });
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!startDate || !endDate || !dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return new Response('Invalid date parameters. Both startDate and endDate are required in YYYY-MM-DD format', { status: 400, headers: getCorsHeaders(env) });
     }
     const { exportComprehensiveReport } = await import('./export');
     const res = await exportComprehensiveReport(env, startDate, endDate);
     const newRes = new Response(res.body, res);
-    newRes.headers.set('Access-Control-Allow-Origin', '*');
+    const corsHeaders = getCorsHeaders(env);
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      newRes.headers.set(key, value);
+    }
     return newRes;
   }
 
