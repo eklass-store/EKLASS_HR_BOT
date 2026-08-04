@@ -109,7 +109,7 @@ const navigation = [
   { name: 'نظرة عامة', to: '/', routeName: 'home', icon: LayoutDashboard },
   { name: 'الموظفين', to: '/employees', routeName: 'employees', icon: Users },
   { name: 'الطلبات', to: '/requests', routeName: 'requests', icon: FileText },
-  { name: 'الحضور والرواتب', to: '/payroll', routeName: 'payroll', icon: DollarSign },
+  { name: 'الرواتب', to: '/payroll', routeName: 'payroll', icon: DollarSign },
   { name: 'الحضور اليومي', to: '/attendance-daily', routeName: 'attendance-daily', icon: Clock },
   { name: 'التقارير', to: '/reports', routeName: 'reports', icon: BarChart2 },
   { name: 'الإذاعة', to: '/broadcast', routeName: 'broadcast', icon: Radio },
