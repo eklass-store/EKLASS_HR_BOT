@@ -67,4 +67,44 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
     await ctx.answerCallbackQuery();
   });
 
+  bot.callbackQuery(/^confirm_payroll_(.+)$/, async (ctx) => {
+    const month = ctx.match[1];
+    const tid = String(ctx.from?.id);
+    const emp = await getEmployeeByTelegramId(env, tid);
+    
+    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
+
+    try {
+      // Check if already confirmed
+      const record = await env.DB.prepare(
+        "SELECT is_confirmed FROM Payroll WHERE employee_id = ? AND month = ?"
+      ).bind(emp.id, month).first();
+
+      if (!record) {
+        return ctx.answerCallbackQuery('لم يتم العثور على سجل راتب لهذا الشهر.');
+      }
+
+      if (record.is_confirmed) {
+        return ctx.answerCallbackQuery('لقد قمت بتأكيد استلام هذا الراتب مسبقاً! ✅', { show_alert: true });
+      }
+
+      // Update the record
+      await env.DB.prepare(
+        "UPDATE Payroll SET is_confirmed = 1, confirmed_at = CURRENT_TIMESTAMP WHERE employee_id = ? AND month = ?"
+      ).bind(emp.id, month).run();
+
+      // Edit message to remove button
+      const newText = ctx.callbackQuery.message?.text + '\n\n✅ *تم تأكيد الاستلام بنجاح*';
+      await ctx.editMessageText(newText, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [] }
+      });
+
+      await ctx.answerCallbackQuery('تم تأكيد الاستلام بنجاح! ✅', { show_alert: true });
+    } catch (e) {
+      console.error(e);
+      await ctx.answerCallbackQuery('حدث خطأ أثناء التأكيد.', { show_alert: true });
+    }
+  });
+
 }

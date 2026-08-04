@@ -181,13 +181,28 @@ export async function handleAdminRoutes(
 
   // ── Leaves ───────────────────────────────────────────────────
   if (path === '/api/admin/leaves' && method === 'GET') {
-    const res = await env.DB.prepare(`
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const status = url.searchParams.get('status');
+
+    let query = `
       SELECT l.*, e.full_name, e.telegram_id, a.full_name as approved_by_name
       FROM Leaves l 
       JOIN Employees e ON l.employee_id = e.id 
       LEFT JOIN Employees a ON l.approved_by = a.id
-      ORDER BY l.created_at DESC LIMIT 100
-    `).all();
+    `;
+    const params: any[] = [];
+    
+    if (status) {
+      query += ` WHERE l.status = ? `;
+      params.push(status);
+    }
+    
+    query += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const res = await env.DB.prepare(query).bind(...params).all();
     return jsonResponse(res.results, 200, env);
   }
 
@@ -221,13 +236,28 @@ export async function handleAdminRoutes(
 
   // ── Loans ────────────────────────────────────────────────────
   if (path === '/api/admin/loans' && method === 'GET') {
-    const res = await env.DB.prepare(`
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const status = url.searchParams.get('status');
+
+    let query = `
       SELECT l.*, e.full_name, e.telegram_id, a.full_name as approved_by_name
       FROM Loans l 
       JOIN Employees e ON l.employee_id = e.id 
       LEFT JOIN Employees a ON l.approved_by = a.id
-      ORDER BY l.created_at DESC LIMIT 100
-    `).all();
+    `;
+    const params: any[] = [];
+    
+    if (status) {
+      query += ` WHERE l.status = ? `;
+      params.push(status);
+    }
+    
+    query += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const res = await env.DB.prepare(query).bind(...params).all();
     return jsonResponse(res.results, 200, env);
   }
 
@@ -343,7 +373,27 @@ export async function handleAdminRoutes(
     return jsonResponse(res.results, 200, env);
   }
 
-  // ── Payroll ──────────────────────────────────────────────────
+  // ── GET Payroll List ──────────────────────────────────────────
+  if (path === '/api/admin/payroll' && method === 'GET') {
+    const url = new URL(request.url);
+    const month = url.searchParams.get('month');
+    let query = `
+      SELECT p.*, e.full_name, e.telegram_id 
+      FROM Payroll p 
+      JOIN Employees e ON p.employee_id = e.id 
+    `;
+    const params: any[] = [];
+    if (month) {
+      query += ` WHERE p.month = ? `;
+      params.push(month);
+    }
+    query += ` ORDER BY p.created_at DESC LIMIT 200`;
+    
+    const res = await env.DB.prepare(query).bind(...params).all();
+    return jsonResponse(res.results, 200, env);
+  }
+
+  // ── Issue Payroll ──────────────────────────────────────────────────
   if (path === '/api/admin/payroll/issue' && method === 'POST') {
     const { month } = await request.json() as PayrollReq;
     if (!month) return jsonResponse({ error: 'Month is required' }, 400, env);
@@ -368,6 +418,7 @@ export async function handleAdminRoutes(
     let issuedCount = 0;
     let skippedCount = 0;
     const batchStatements: any[] = [];
+    const notificationPromises: Promise<any>[] = [];
 
     for (const employee of employees) {
       if (existingEmpIds.has(employee.id)) {
@@ -404,6 +455,28 @@ export async function handleAdminRoutes(
         );
       }
       
+      // TASK 11: Send Telegram message with Confirmation button
+      if (employee.telegram_id) {
+        const msgText = `💰 *تم إصدار راتبك لشهر ${month}*\n\nالراتب الأساسي: ${dynamicMonthSalary} ج.م\nإجمالي الخصومات/السلف: ${totalDed} ج.م\n*الصافي المستحق:* ${netSalary} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
+        const keyboard = {
+          inline_keyboard: [[
+            { text: "✅ تأكيد الاستلام", callback_data: `confirm_payroll_${month}` }
+          ]]
+        };
+        notificationPromises.push(
+          fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: employee.telegram_id,
+              text: msgText,
+              parse_mode: 'Markdown',
+              reply_markup: keyboard
+            })
+          })
+        );
+      }
+      
       issuedCount++;
     }
 
@@ -414,7 +487,9 @@ export async function handleAdminRoutes(
       }
     }
 
-    await logAction(env, adminId, 'ISSUE_PAYROLL', `Issued payroll for ${month} (${issuedCount} issued)`);
+    if (notificationPromises.length > 0) {
+      await Promise.allSettled(notificationPromises);
+    }
     return jsonResponse({ success: true, issuedCount, skippedCount }, 200, env);
   }
 

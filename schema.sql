@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS Payroll (
     total_bonuses    REAL    DEFAULT 0,
     net_salary       REAL    NOT NULL,
     status           TEXT    DEFAULT 'issued',
+    is_confirmed     INTEGER DEFAULT 0,
+    confirmed_at     TIMESTAMP,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(employee_id) REFERENCES Employees(id),
     UNIQUE(employee_id, month)

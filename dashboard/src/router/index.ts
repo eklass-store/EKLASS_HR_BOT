@@ -59,11 +59,7 @@ const router = createRouter({
           name: 'departments',
           component: () => import('../views/DepartmentsView.vue')
         },
-        {
-          path: 'audit-logs',
-          name: 'audit-logs',
-          component: () => import('../views/AuditLogsView.vue')
-        },
+
         {
           path: 'settings',
           name: 'settings',

@@ -43,34 +43,69 @@
         />
       </div>
 
-      <!-- نشاط أخير (مثال سريع للرئيسية) -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8">
-        <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-          <h3 class="text-lg font-bold text-gray-900">حضور اليوم (أحدث السجلات)</h3>
-          <router-link to="/attendance-daily" class="text-sm font-medium text-primary-600 hover:text-primary-700">عرض الكل &larr;</router-link>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        
+        <!-- الطلبات العاجلة -->
+        <div class="lg:col-span-2 space-y-6">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Clock class="w-5 h-5 text-amber-600" />
+                طلبات إجازة عاجلة
+              </h3>
+              <router-link to="/requests" class="text-sm font-medium text-primary-600 hover:text-primary-700">الكل &larr;</router-link>
+            </div>
+            <ul class="divide-y divide-gray-100">
+              <li v-for="leave in pendingLeaves" :key="leave.id" class="px-6 py-4 hover:bg-gray-50 flex justify-between items-center">
+                <div>
+                  <p class="text-sm font-bold text-gray-900">{{ leave.full_name }}</p>
+                  <p class="text-xs text-gray-500 mt-1">{{ leave.start_date }} - {{ leave.type === 'annual' ? 'سنوية' : leave.type === 'sick' ? 'مرضية' : 'بدون راتب' }}</p>
+                </div>
+                <router-link to="/requests" class="text-sm bg-primary-50 text-primary-700 px-3 py-1 rounded-md hover:bg-primary-100 transition-colors">مراجعة</router-link>
+              </li>
+              <li v-if="pendingLeaves.length === 0" class="px-6 py-6 text-center text-sm text-gray-500">لا توجد طلبات إجازة قيد الانتظار.</li>
+            </ul>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <DollarSign class="w-5 h-5 text-rose-600" />
+                طلبات سلف عاجلة
+              </h3>
+              <router-link to="/requests" class="text-sm font-medium text-primary-600 hover:text-primary-700">الكل &larr;</router-link>
+            </div>
+            <ul class="divide-y divide-gray-100">
+              <li v-for="loan in pendingLoans" :key="loan.id" class="px-6 py-4 hover:bg-gray-50 flex justify-between items-center">
+                <div>
+                  <p class="text-sm font-bold text-gray-900">{{ loan.full_name }}</p>
+                  <p class="text-xs text-gray-500 mt-1">{{ loan.amount.toLocaleString() }} ج.م - {{ loan.reason }}</p>
+                </div>
+                <router-link to="/requests" class="text-sm bg-primary-50 text-primary-700 px-3 py-1 rounded-md hover:bg-primary-100 transition-colors">مراجعة</router-link>
+              </li>
+              <li v-if="pendingLoans.length === 0" class="px-6 py-6 text-center text-sm text-gray-500">لا توجد طلبات سلف قيد الانتظار.</li>
+            </ul>
+          </div>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200 text-right">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">الموظف</th>
-                <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">وقت الحضور</th>
-                <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">الحالة</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="record in recentAttendance" :key="record.id" class="hover:bg-gray-50 transition-colors">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ record.full_name }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" dir="ltr">{{ record.check_in_time || '---' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <Badge :status="record.status === 'late' ? 'rejected' : 'approved'" />
-                </td>
-              </tr>
-              <tr v-if="recentAttendance.length === 0">
-                <td colspan="3" class="px-6 py-10 text-center text-gray-500">لا يوجد سجلات حضور اليوم حتى الآن</td>
-              </tr>
-            </tbody>
-          </table>
+
+        <!-- إجراءات سريعة -->
+        <div class="space-y-4">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-100 bg-gray-50">
+              <h3 class="text-lg font-bold text-gray-900">إجراءات سريعة</h3>
+            </div>
+            <div class="p-4 grid grid-cols-1 gap-3">
+              <router-link to="/payroll" class="flex items-center p-3 text-base font-bold text-gray-900 rounded-lg bg-gray-50 hover:bg-gray-100 group transition-colors">
+                <span class="flex-1 ml-3 whitespace-nowrap">إصدار الرواتب</span>
+              </router-link>
+              <router-link to="/broadcast" class="flex items-center p-3 text-base font-bold text-gray-900 rounded-lg bg-gray-50 hover:bg-gray-100 group transition-colors">
+                <span class="flex-1 ml-3 whitespace-nowrap">إرسال تعميم</span>
+              </router-link>
+              <router-link to="/employees" class="flex items-center p-3 text-base font-bold text-gray-900 rounded-lg bg-gray-50 hover:bg-gray-100 group transition-colors">
+                <span class="flex-1 ml-3 whitespace-nowrap">إدارة الموظفين</span>
+              </router-link>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -81,22 +116,24 @@
 import { ref, onMounted } from 'vue'
 import { Users, CheckCircle, Clock, DollarSign } from 'lucide-vue-next'
 import StatCard from '../components/StatCard.vue'
-import Badge from '../components/Badge.vue'
 import { apiFetch } from '../api/client'
 
 const loading = ref(true)
 const stats = ref<any>(null)
-const recentAttendance = ref<any[]>([])
+const pendingLeaves = ref<any[]>([])
+const pendingLoans = ref<any[]>([])
 const currentDate = ref(new Intl.DateTimeFormat('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date()))
 
 onMounted(async () => {
   try {
-    const [statsRes, attendanceRes] = await Promise.all([
+    const [statsRes, leavesRes, loansRes] = await Promise.all([
       apiFetch('/stats'),
-      apiFetch('/attendance?limit=5')
+      apiFetch('/admin/leaves?status=pending&limit=3'),
+      apiFetch('/admin/loans?status=pending&limit=3')
     ])
     stats.value = statsRes
-    recentAttendance.value = attendanceRes
+    pendingLeaves.value = leavesRes
+    pendingLoans.value = loansRes
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
   } finally {

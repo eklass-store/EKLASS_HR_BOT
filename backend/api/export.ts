@@ -49,7 +49,7 @@ export async function exportEmployeesExcel(env: Env): Promise<Response> {
 
 export async function exportMonthlyReport(env: Env, month: string): Promise<Response> {
   const result = await env.DB.prepare(`
-    SELECT e.id, e.full_name, e.base_salary, p.total_deductions, p.net_salary, p.status as payroll_status
+    SELECT e.id, e.full_name, e.base_salary, p.total_deductions, p.net_salary, p.status as payroll_status, p.is_confirmed, p.confirmed_at
     FROM Employees e
     LEFT JOIN Payroll p ON e.id = p.employee_id AND p.month = ?
     WHERE e.is_active = 1
@@ -66,7 +66,8 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
     { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
     { header: 'إجمالي الخصومات', key: 'total_deductions', width: 20 },
     { header: 'صافي الراتب', key: 'net_salary', width: 15 },
-    { header: 'حالة الدفع', key: 'payroll_status', width: 15 }
+    { header: 'حالة الدفع', key: 'payroll_status', width: 15 },
+    { header: 'حالة الاستلام', key: 'receipt_status', width: 20 }
   ];
 
   for (const row of result.results as any[]) {
@@ -76,7 +77,8 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
       base_salary: row.base_salary,
       total_deductions: row.total_deductions ?? 0,
       net_salary: row.net_salary ?? row.base_salary,
-      payroll_status: row.payroll_status === 'issued' ? 'تم الدفع' : (row.payroll_status ? 'معلق' : 'لم يصدر')
+      payroll_status: row.payroll_status === 'issued' ? 'تم الدفع' : (row.payroll_status ? 'معلق' : 'لم يصدر'),
+      receipt_status: row.is_confirmed ? `تم الاستلام (${row.confirmed_at})` : (row.payroll_status === 'issued' ? 'في انتظار التأكيد' : '---')
     });
   }
 
