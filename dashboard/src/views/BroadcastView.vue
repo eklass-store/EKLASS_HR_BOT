@@ -36,6 +36,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { apiFetch } from '../api/client'
+import { useToast } from '../composables/useToast'
+import { useConfirm } from '../composables/useConfirm'
+
+const { showToast } = useToast()
+const { confirm } = useConfirm()
 
 const message = ref('')
 const loading = ref(false)
@@ -44,7 +49,15 @@ const errorMsg = ref('')
 
 const sendBroadcast = async () => {
   if (!message.value.trim()) return
-  if (!confirm('هل أنت متأكد أنك تريد إرسال هذه الرسالة لجميع الموظفين؟')) return
+  
+  const isConfirmed = await confirm({
+    title: 'إرسال إذاعة',
+    message: 'هل أنت متأكد أنك تريد إرسال هذه الرسالة لجميع الموظفين النشطين؟',
+    confirmText: 'نعم، إرسال',
+    confirmColor: 'primary'
+  })
+  
+  if (!isConfirmed) return
 
   loading.value = true
   successMsg.value = ''
@@ -56,9 +69,11 @@ const sendBroadcast = async () => {
       body: JSON.stringify({ message: message.value })
     })
     successMsg.value = `تم إرسال الإذاعة بنجاح إلى ${res.sentCount} موظف/موظفة.`
+    showToast('تم إرسال الإذاعة بنجاح', 'success')
     message.value = ''
   } catch (err: any) {
     errorMsg.value = err.message || 'فشل في إرسال الإذاعة'
+    showToast(errorMsg.value, 'error')
   } finally {
     loading.value = false
   }

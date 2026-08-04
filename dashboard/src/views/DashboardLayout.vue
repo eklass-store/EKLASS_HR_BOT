@@ -1,5 +1,8 @@
 <template>
   <div class="h-screen flex overflow-hidden bg-gray-50 font-sans text-gray-900 selection:bg-primary-100 selection:text-primary-900">
+    <Toast />
+    <ConfirmModal />
+    
     <Sidebar :isOpen="sidebarOpen" @close="sidebarOpen = false" />
     <div class="flex flex-col w-0 flex-1 overflow-hidden">
       <Header @openSidebar="sidebarOpen = true" />
@@ -22,6 +25,8 @@
 import { ref } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
 import Header from '../components/Header.vue'
+import Toast from '../components/Toast.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
 
 const sidebarOpen = ref(false)
 </script>

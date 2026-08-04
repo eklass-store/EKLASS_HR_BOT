@@ -54,6 +54,29 @@ export async function handleAdminRoutes(
     }
   }
 
+  const empMessageMatch = path.match(/^\/api\/admin\/employees\/(\d+)\/message$/);
+  if (empMessageMatch && method === 'POST') {
+    const empId = parseInt(empMessageMatch[1]);
+    const data = await request.json() as any;
+    if (!data.message) return jsonResponse({ error: 'Message required' }, 400, env);
+    
+    const emp = await getEmployeeById(env, empId, true);
+    if (!emp) return jsonResponse({ error: 'Not found' }, 404, env);
+    
+    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: emp.telegram_id,
+        text: `📩 *رسالة من الإدارة:*\n\n${data.message}`,
+        parse_mode: 'Markdown'
+      })
+    });
+    
+    if (!res.ok) return jsonResponse({ error: 'Failed to send message via Telegram' }, 500, env);
+    return jsonResponse({ success: true }, 200, env);
+  }
+
   const empMatch = path.match(/^\/api\/admin\/employees\/(\d+)$/);
   if (empMatch) {
     const empId = parseInt(empMatch[1]);
@@ -78,7 +101,10 @@ export async function handleAdminRoutes(
       const data = await request.json() as any;
       if (data.base_salary !== undefined) await updateEmployeeSalary(env, empId, data.base_salary);
       if (data.role !== undefined) await updateEmployeeRole(env, empId, data.role);
-      if (data.full_name && data.telegram_id) {
+      if (data.is_active !== undefined && !data.full_name) {
+        await env.DB.prepare('UPDATE Employees SET is_active = ? WHERE id = ?')
+          .bind(data.is_active ? 1 : 0, empId).run();
+      } else if (data.full_name && data.telegram_id) {
         await env.DB.prepare('UPDATE Employees SET full_name = ?, department_id = ?, is_active = ? WHERE id = ?')
           .bind(data.full_name, data.department_id || null, data.is_active !== undefined ? (data.is_active ? 1 : 0) : 1, empId).run();
       }

@@ -13,6 +13,30 @@
       </div>
     </div>
 
+    <!-- Tabs -->
+    <div class="border-b border-gray-200">
+      <nav class="-mb-px flex space-x-8 space-x-reverse" aria-label="Tabs">
+        <button 
+          @click="activeTab = 'active'" 
+          :class="activeTab === 'active' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+          class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+          الموظفين الحاليين
+        </button>
+        <button 
+          @click="activeTab = 'inactive'" 
+          :class="activeTab === 'inactive' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+          class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+          الموظفين السابقين (تم إيقافهم)
+        </button>
+        <button 
+          @click="activeTab = 'all'" 
+          :class="activeTab === 'all' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+          class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+          الكل
+        </button>
+      </nav>
+    </div>
+
     <FilterBar 
       :showSearch="true" 
       :showDepartment="true" 
@@ -142,6 +166,11 @@ import { ref, computed, onMounted } from 'vue'
 import { apiFetch } from '../api/client'
 import { normalizeArabicText } from '../utils/helpers'
 import FilterBar from '../components/FilterBar.vue'
+import { useToast } from '../composables/useToast'
+import { useConfirm } from '../composables/useConfirm'
+
+const { showToast } = useToast()
+const { confirm } = useConfirm()
 
 const employees = ref<any[]>([])
 const departments = ref<any[]>([])
@@ -153,8 +182,16 @@ const handleFilter = (f: any) => {
   filters.value = f
 }
 
+const activeTab = ref('active')
+
 const filteredEmployees = computed(() => {
   let result = employees.value
+  
+  if (activeTab.value === 'active') {
+    result = result.filter(e => e.is_active)
+  } else if (activeTab.value === 'inactive') {
+    result = result.filter(e => !e.is_active)
+  }
   
   if (filters.value.departmentId) {
     result = result.filter(e => e.department_id === filters.value.departmentId)
@@ -193,6 +230,7 @@ const loadData = async () => {
     departments.value = deptData
   } catch (err) {
     console.error('Failed to load data', err)
+    showToast('فشل في تحميل البيانات', 'error')
   } finally {
     loading.value = false
   }
@@ -217,7 +255,7 @@ const closeModal = () => {
 
 const saveEmployee = async () => {
   if (!form.value.telegram_id || !form.value.full_name) {
-    alert('معرف تيليجرام والاسم مطلوبان')
+    showToast('معرف تيليجرام والاسم مطلوبان', 'warning')
     return
   }
 
@@ -233,35 +271,47 @@ const saveEmployee = async () => {
         method: 'PUT',
         body: JSON.stringify(payload)
       })
+      showToast('تم تعديل الموظف بنجاح', 'success')
     } else {
       await apiFetch('/admin/employees', {
         method: 'POST',
         body: JSON.stringify(payload)
       })
+      showToast('تمت إضافة الموظف بنجاح', 'success')
     }
     closeModal()
     await loadData()
   } catch (err: any) {
-    alert(err.message || 'خطأ أثناء الحفظ')
+    showToast(err.message || 'خطأ أثناء الحفظ', 'error')
   } finally {
     saving.value = false
   }
 }
 
 const toggleActive = async (id: number, isActive: boolean) => {
-  if (!confirm(`هل أنت متأكد أنك تريد ${isActive ? 'تفعيل' : 'إيقاف'} هذا الموظف؟`)) return
+  const isConfirmed = await confirm({
+    title: isActive ? 'تفعيل الموظف' : 'إيقاف الموظف',
+    message: `هل أنت متأكد أنك تريد ${isActive ? 'تفعيل' : 'إيقاف'} هذا الموظف؟`,
+    confirmText: isActive ? 'تفعيل' : 'إيقاف',
+    confirmColor: isActive ? 'primary' : 'red'
+  })
+  
+  if (!isConfirmed) return
+
   try {
     if (!isActive) {
       await apiFetch(`/admin/employees/${id}`, { method: 'DELETE' })
+      showToast('تم إيقاف الموظف', 'success')
     } else {
       await apiFetch(`/admin/employees/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ is_active: true })
       })
+      showToast('تم تفعيل الموظف', 'success')
     }
     await loadData()
   } catch (err) {
-    alert('خطأ أثناء تغيير الحالة')
+    showToast('خطأ أثناء تغيير الحالة', 'error')
   }
 }
 

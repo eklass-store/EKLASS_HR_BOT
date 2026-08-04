@@ -227,6 +227,19 @@ export async function handleApiRoutes(
     return newRes;
   }
 
+  // ── GET /api/export/comprehensive ──────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/export/comprehensive') {
+    const month = url.searchParams.get('month');
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return new Response('Invalid month parameter. Format must be YYYY-MM', { status: 400, headers: getCorsHeaders(env) });
+    }
+    const { exportComprehensiveReport } = await import('./export');
+    const res = await exportComprehensiveReport(env, month);
+    const newRes = new Response(res.body, res);
+    newRes.headers.set('Access-Control-Allow-Origin', '*');
+    return newRes;
+  }
+
   // ── GET /api/debug ─────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/debug') {
     const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`);

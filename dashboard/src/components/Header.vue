@@ -52,8 +52,19 @@ const routeNames: Record<string, string> = {
 
 const currentRouteName = computed(() => routeNames[route.name as string] || '')
 
-const logout = () => {
-  authStore.logout()
-  router.push('/login')
+import { useConfirm } from '../composables/useConfirm'
+const { confirm } = useConfirm()
+
+const logout = async () => {
+  const isConfirmed = await confirm({
+    title: 'تسجيل الخروج',
+    message: 'هل أنت متأكد أنك تريد تسجيل الخروج من النظام؟',
+    confirmText: 'تسجيل الخروج',
+    confirmColor: 'red'
+  })
+  if (isConfirmed) {
+    authStore.logout()
+    router.push('/login')
+  }
 }
 </script>

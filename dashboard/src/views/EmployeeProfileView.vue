@@ -1,12 +1,22 @@
 <template>
   <div class="space-y-6">
-    <div class="flex items-center gap-4">
-      <router-link to="/employees" class="p-2 rounded-lg hover:bg-gray-200 transition-colors">
-        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-      </router-link>
-      <div>
-        <h2 class="text-2xl font-bold text-gray-900">ملف الموظف</h2>
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <router-link to="/employees" class="p-2 rounded-lg hover:bg-gray-200 transition-colors">
+          <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        </router-link>
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900">ملف الموظف</h2>
+        </div>
       </div>
+      <button 
+        v-if="employee"
+        @click="showMsgModal = true"
+        class="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold text-sm transition-colors shadow-sm"
+      >
+        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+        إرسال رسالة
+      </button>
     </div>
 
     <div v-if="loading" class="animate-pulse space-y-6">
@@ -132,6 +142,13 @@
           </div>
         </div>
       </div>
+      
+      <SendMessageModal 
+        :isOpen="showMsgModal"
+        :employeeId="employee?.id"
+        :employeeName="employee?.full_name"
+        @close="showMsgModal = false"
+      />
     </template>
   </div>
 </template>
@@ -141,8 +158,12 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiFetch } from '../api/client'
 import Badge from '../components/Badge.vue'
+import SendMessageModal from '../components/SendMessageModal.vue'
+import { useToast } from '../composables/useToast'
 
 const route = useRoute()
+const { showToast } = useToast()
+
 const loading = ref(true)
 const employee = ref<any>(null)
 const attendance = ref<any[]>([])
@@ -150,6 +171,7 @@ const leaves = ref<any[]>([])
 const loans = ref<any[]>([])
 
 const activeTab = ref('الحضور')
+const showMsgModal = ref(false)
 
 onMounted(async () => {
   try {
@@ -160,6 +182,7 @@ onMounted(async () => {
     loans.value = data.loans || []
   } catch (error) {
     console.error(error)
+    showToast('فشل في جلب بيانات الموظف', 'error')
   } finally {
     loading.value = false
   }

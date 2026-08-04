@@ -3,7 +3,7 @@
     <!-- Mobile background overlay -->
     <div
       v-if="isOpen"
-      class="fixed inset-0 z-20 bg-gray-900 bg-opacity-50 transition-opacity lg:hidden"
+      class="fixed inset-0 z-20 bg-gray-900/40 backdrop-blur-sm transition-opacity lg:hidden"
       @click="$emit('close')"
     ></div>
 
@@ -11,48 +11,75 @@
     <div
       :class="[
         isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
-        'fixed inset-y-0 right-0 z-30 w-64 bg-white border-l border-gray-100 shadow-xl shadow-indigo-100/50 transition duration-300 transform lg:static lg:inset-0 flex flex-col'
+        isCollapsed ? 'w-20' : 'w-64',
+        'fixed inset-y-0 right-0 z-30 bg-white border-l border-gray-100 transition-all duration-300 transform lg:static flex flex-col shadow-sm'
       ]"
     >
-      <div class="flex items-center justify-center h-20 border-b border-gray-100 bg-gradient-to-br from-indigo-50 to-white">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-indigo-800 flex items-center justify-center shadow-lg shadow-primary-200">
-            <span class="text-white font-bold text-xl">EK</span>
+      <!-- Header -->
+      <div class="flex items-center justify-between h-20 px-4 border-b border-gray-100">
+        <div class="flex items-center gap-3 overflow-hidden" :class="isCollapsed ? 'justify-center w-full' : ''">
+          <div class="w-10 h-10 flex-shrink-0 rounded-xl bg-primary-50 flex items-center justify-center">
+            <span class="text-primary-600 font-bold text-xl">EK</span>
           </div>
-          <span class="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-primary-700 to-indigo-900 tracking-wider">إي كلاس HR</span>
+          <span v-if="!isCollapsed" class="text-lg font-black text-gray-900 tracking-wider whitespace-nowrap">إي كلاس HR</span>
         </div>
+        
+        <button 
+          v-if="!isCollapsed"
+          @click="toggleCollapse" 
+          class="hidden lg:flex text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <ChevronRight class="w-5 h-5" />
+        </button>
       </div>
 
-      <nav class="flex-1 mt-6 px-4 space-y-2 overflow-y-auto">
+      <!-- Navigation -->
+      <nav class="flex-1 mt-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+        <button 
+          v-if="isCollapsed"
+          @click="toggleCollapse" 
+          class="w-full hidden lg:flex justify-center mb-4 text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+          title="توسيع القائمة"
+        >
+          <Menu class="w-5 h-5" />
+        </button>
+
         <router-link
           v-for="item in navigation"
           :key="item.name"
           :to="item.to"
-          class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200"
-          :class="[$route.name === item.routeName 
-            ? 'bg-primary-600 text-white shadow-md shadow-primary-200 translate-x-1' 
-            : 'text-gray-500 hover:bg-indigo-50 hover:text-primary-700']"
+          class="group flex items-center px-3 py-3 text-sm font-bold rounded-xl transition-all duration-200"
+          :class="[
+            $route.name === item.routeName 
+              ? 'bg-primary-50 text-primary-700' 
+              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+            isCollapsed ? 'justify-center' : ''
+          ]"
+          :title="isCollapsed ? item.name : ''"
           @click="closeMobileMenu"
         >
           <component 
             :is="item.icon" 
-            class="ml-4 flex-shrink-0 h-5 w-5 transition-colors duration-200" 
-            :class="[$route.name === item.routeName ? 'text-white' : 'text-gray-400 group-hover:text-primary-600']" 
+            class="flex-shrink-0 w-5 h-5 transition-colors duration-200"
+            :class="[
+              $route.name === item.routeName ? 'text-primary-600' : 'text-gray-400 group-hover:text-gray-600',
+              isCollapsed ? '' : 'ml-3'
+            ]" 
             aria-hidden="true" 
           />
-          {{ item.name }}
+          <span v-if="!isCollapsed" class="truncate">{{ item.name }}</span>
         </router-link>
       </nav>
       
       <!-- Footer Info -->
-      <div class="p-4 border-t border-gray-100 bg-gray-50/50">
+      <div class="p-4 border-t border-gray-100" :class="isCollapsed ? 'flex justify-center' : ''">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-            <span class="text-primary-700 font-bold text-xs">M</span>
+          <div class="w-10 h-10 flex-shrink-0 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+            <span class="text-gray-600 font-bold text-sm">M</span>
           </div>
-          <div class="flex-col flex">
-            <span class="text-xs font-bold text-gray-700">مدير النظام</span>
-            <span class="text-[10px] text-gray-400">الإدارة</span>
+          <div v-if="!isCollapsed" class="flex-col flex overflow-hidden">
+            <span class="text-sm font-bold text-gray-900 truncate">مدير النظام</span>
+            <span class="text-xs text-gray-500 truncate">الإدارة</span>
           </div>
         </div>
       </div>
@@ -61,7 +88,8 @@
 </template>
 
 <script setup lang="ts">
-import { LayoutDashboard, Users, FileText, DollarSign, Settings, BarChart2, Radio } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { LayoutDashboard, Users, FileText, DollarSign, Settings, BarChart2, Radio, ChevronRight, Menu } from 'lucide-vue-next'
 
 const props = defineProps<{
   isOpen: boolean
@@ -70,6 +98,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+const isCollapsed = ref(false)
+
+const toggleCollapse = () => {
+  isCollapsed.value = !isCollapsed.value
+}
 
 const navigation = [
   { name: 'نظرة عامة', to: '/', routeName: 'home', icon: LayoutDashboard },
@@ -87,3 +121,16 @@ const closeMobileMenu = () => {
   }
 }
 </script>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #e5e7eb;
+  border-radius: 20px;
+}
+</style>
