@@ -5,7 +5,32 @@
       <p class="mt-1 text-sm text-gray-500">إدارة الإعدادات العامة للعطلات الرسمية وأوقات العمل وتذكيرات النظام.</p>
     </div>
 
-    <!-- General Settings -->
+    <!-- Work Hours Settings -->
+    <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-6 py-5 bg-gray-50 border-b border-gray-200">
+        <h3 class="text-lg leading-6 font-bold text-gray-900">أوقات العمل الرسمية</h3>
+      </div>
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">وقت بدء العمل</label>
+          <div class="flex gap-3">
+            <input type="time" v-model="settingsData.work_start_time" class="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-primary-500 focus:border-primary-500 sm:text-sm" dir="ltr">
+            <button @click="saveSetting('work_start_time', settingsData.work_start_time)" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">حفظ</button>
+          </div>
+          <p class="mt-2 text-xs text-gray-500">الوقت الذي يبدأ عنده حساب التأخير (مثال: 09:00)</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">وقت انتهاء العمل</label>
+          <div class="flex gap-3">
+            <input type="time" v-model="settingsData.work_end_time" class="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-primary-500 focus:border-primary-500 sm:text-sm" dir="ltr">
+            <button @click="saveSetting('work_end_time', settingsData.work_end_time)" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">حفظ</button>
+          </div>
+          <p class="mt-2 text-xs text-gray-500">الوقت الذي يبدأ بعده حساب الأوفر تايم (مثال: 17:00)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payroll Settings -->
     <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
       <div class="px-6 py-5 bg-gray-50 border-b border-gray-200">
         <h3 class="text-lg leading-6 font-bold text-gray-900">إعدادات الرواتب</h3>
