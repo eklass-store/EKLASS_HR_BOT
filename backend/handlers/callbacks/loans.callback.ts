@@ -62,7 +62,7 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
     }
 
     const newStatus = isApprove ? 'approved' : 'rejected';
-    await updateLoanStatus(env, loanId, newStatus);
+    await updateLoanStatus(env, loanId, newStatus, admin.id);
     await logAction(env, admin.id, isApprove ? 'APPROVE_LOAN' : 'REJECT_LOAN', `تم ${isApprove ? 'قبول' : 'رفض'} سلفة ID ${loanId} للموظف ID ${loan.employee_id} بمبلغ ${loan.amount}`);
 
     // إشعار الموظف

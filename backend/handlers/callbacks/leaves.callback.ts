@@ -162,7 +162,7 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
     }
 
     const newStatus = isApprove ? 'approved' : 'rejected';
-    await updateLeaveStatus(env, leaveId, newStatus);
+    await updateLeaveStatus(env, leaveId, newStatus, admin.id);
     await logAction(env, admin.id, isApprove ? 'APPROVE_LEAVE' : 'REJECT_LEAVE', `تم ${isApprove ? 'قبول' : 'رفض'} إجازة ID ${leaveId} للموظف ID ${leave.employee_id}`);
 
     // FIX BUG-07: إشعار الموظف

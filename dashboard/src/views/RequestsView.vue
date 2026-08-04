@@ -144,14 +144,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { apiFetch } from '../api/client'
-import { useAuthStore } from '../stores/auth'
 
 const activeTab = ref<'leaves' | 'loans'>('leaves')
 
 const leaves = ref<any[]>([])
 const loans = ref<any[]>([])
 const loading = ref(true)
-const authStore = useAuthStore()
 
 const pendingLeavesCount = computed(() => leaves.value.filter(l => l.status === 'pending').length)
 const pendingLoansCount = computed(() => loans.value.filter(l => l.status === 'pending').length)

@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { apiFetch } from '../api/client'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement } from 'chart.js'
 import { Pie, Bar, Doughnut, Line as LineChart } from 'vue-chartjs'
@@ -150,7 +150,7 @@ const allLeaves = ref<any[]>([])
 const allLoans = ref<any[]>([])
 const employees = ref<any[]>([])
 const departments = ref<any[]>([])
-const allAttendance = ref<any[]>([])
+
 
 const activeEmployees = ref(0)
 const approvedLeaves = ref(0)
