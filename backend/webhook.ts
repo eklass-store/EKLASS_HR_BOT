@@ -20,9 +20,11 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
   }
   if (env.WEBHOOK_SECRET) {
     const expected = env.WEBHOOK_SECRET.replace(/[^a-zA-Z0-9_-]/g, '');
-    const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
-    if (secret !== expected) {
-      return new Response('Unauthorized', { status: 401 });
+    if (expected) {
+      const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+      if (secret !== expected) {
+        return new Response('Unauthorized', { status: 401 });
+      }
     }
   }
   const bot = new Bot(env.BOT_TOKEN);
