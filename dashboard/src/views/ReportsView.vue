@@ -7,16 +7,15 @@
       </div>
       <div class="mt-4 sm:mt-0 w-full sm:w-auto flex flex-col sm:flex-row gap-4 items-center">
         <FilterBar 
-          :showMonth="true" 
+          :showDateRange="true" 
           :showDepartment="true"
-          :availableMonths="availableMonths" 
           :departments="departments"
           @filter="handleFilter" 
         />
         <button @click="exportComprehensive" :disabled="exporting" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 whitespace-nowrap transition-colors disabled:opacity-50">
           <svg v-if="exporting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
           <svg v-else class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-          {{ exporting ? 'جاري التصدير...' : 'إغلاق الشهر (إكسل)' }}
+          {{ exporting ? 'جاري التصدير...' : 'إغلاق الفترة المحددة (إكسل)' }}
         </button>
       </div>
     </div>
@@ -141,7 +140,8 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 
 const loading = ref(true)
 const exporting = ref(false)
-const selectedMonth = ref('all')
+const selectedStartDate = ref('')
+const selectedEndDate = ref('')
 const selectedDepartment = ref('')
 const authStore = useAuthStore()
 const toast = useToast()
@@ -157,16 +157,9 @@ const approvedLeaves = ref(0)
 const totalLoansAmount = ref(0)
 const totalLateMinutes = ref(0)
 
-const availableMonths = computed(() => {
-  const months = new Set<string>()
-  allLeaves.value.forEach(l => { if (l.start_date) months.add(l.start_date.substring(0, 7)) })
-  allLoans.value.forEach(l => { if (l.created_at) months.add(l.created_at.substring(0, 7)) })
-  allAttendance.value.forEach(a => { if (a.date) months.add(a.date.substring(0, 7)) })
-  return Array.from(months).sort().reverse()
-})
-
 const handleFilter = (f: any) => {
-  selectedMonth.value = f.month || 'all'
+  selectedStartDate.value = f.startDate || ''
+  selectedEndDate.value = f.endDate || ''
   selectedDepartment.value = f.departmentId || ''
   processData()
 }
@@ -249,9 +242,9 @@ const processData = () => {
   let filteredLeaves = allLeaves.value.filter(l => empIds.has(l.employee_id))
   let filteredLoans = allLoans.value.filter(l => empIds.has(l.employee_id))
 
-  if (selectedMonth.value !== 'all') {
-    filteredLeaves = filteredLeaves.filter(l => l.start_date.startsWith(selectedMonth.value))
-    filteredLoans = filteredLoans.filter(l => l.created_at?.startsWith(selectedMonth.value) || true) 
+  if (selectedStartDate.value && selectedEndDate.value) {
+    filteredLeaves = filteredLeaves.filter(l => l.start_date >= selectedStartDate.value && l.start_date <= selectedEndDate.value)
+    filteredLoans = filteredLoans.filter(l => l.created_at?.substring(0,10) >= selectedStartDate.value && l.created_at?.substring(0,10) <= selectedEndDate.value) 
   }
 
   // Calculate stats
@@ -329,8 +322,8 @@ const processData = () => {
 }
 
 const exportComprehensive = async () => {
-  if (selectedMonth.value === 'all') {
-    toast.showToast('يرجى اختيار شهر محدد أولاً لاستخراج التقرير الشامل', 'error')
+  if (!selectedStartDate.value || !selectedEndDate.value) {
+    toast.showToast('يرجى اختيار تاريخ البداية والنهاية أولاً لاستخراج التقرير الشامل', 'error')
     return
   }
 
@@ -338,7 +331,7 @@ const exportComprehensive = async () => {
   const API_BASE = import.meta.env.VITE_API_URL || '/api'
   
   try {
-    const res = await fetch(`${API_BASE}/export/comprehensive?month=${selectedMonth.value}`, {
+    const res = await fetch(`${API_BASE}/export/comprehensive?startDate=${selectedStartDate.value}&endDate=${selectedEndDate.value}`, {
       headers: {
         'Authorization': `Bearer ${authStore.token}`
       }
@@ -351,11 +344,11 @@ const exportComprehensive = async () => {
     const a = document.createElement('a')
     a.style.display = 'none'
     a.href = url
-    a.download = `تقرير_إغلاق_الشهر_${selectedMonth.value}.xlsx`
+    a.download = `تقرير_الإغلاق_${selectedStartDate.value}_إلى_${selectedEndDate.value}.xlsx`
     document.body.appendChild(a)
     a.click()
     window.URL.revokeObjectURL(url)
-    toast.showToast('تم تصدير تقرير إغلاق الشهر بنجاح', 'success')
+    toast.showToast('تم تصدير التقرير بنجاح', 'success')
   } catch (err: any) {
     toast.showToast(err.message || 'حدث خطأ أثناء التصدير', 'error')
   } finally {

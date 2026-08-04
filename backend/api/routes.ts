@@ -229,12 +229,13 @@ export async function handleApiRoutes(
 
   // ── GET /api/export/comprehensive ──────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/export/comprehensive') {
-    const month = url.searchParams.get('month');
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-      return new Response('Invalid month parameter. Format must be YYYY-MM', { status: 400, headers: getCorsHeaders(env) });
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    if (!startDate || !endDate) {
+      return new Response('Invalid date parameters. Both startDate and endDate are required', { status: 400, headers: getCorsHeaders(env) });
     }
     const { exportComprehensiveReport } = await import('./export');
-    const res = await exportComprehensiveReport(env, month);
+    const res = await exportComprehensiveReport(env, startDate, endDate);
     const newRes = new Response(res.body, res);
     newRes.headers.set('Access-Control-Allow-Origin', '*');
     return newRes;

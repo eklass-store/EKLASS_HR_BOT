@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 
 const props = defineProps<{
-  showMonth?: boolean
+  showDateRange?: boolean
   showSearch?: boolean
   showStatus?: boolean
   showDepartment?: boolean
@@ -16,6 +16,8 @@ const emit = defineEmits<{
 
 const filters = ref({
   month: '',
+  startDate: '',
+  endDate: '',
   search: '',
   status: '',
   departmentId: ''
@@ -40,16 +42,26 @@ watch(filters, (newVal) => {
       >
     </div>
 
-    <!-- Month -->
-    <div v-if="showMonth" class="w-48">
-      <label class="block text-xs font-medium text-gray-500 mb-1">الشهر</label>
-      <select 
-        v-model="filters.month" 
-        class="block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition-colors"
-      >
-        <option value="">كل الأشهر</option>
-        <option v-for="m in availableMonths" :key="m" :value="m">{{ m }}</option>
-      </select>
+    <!-- Date Range -->
+    <div v-if="showDateRange" class="w-40 flex items-end">
+      <div class="w-full">
+        <label class="block text-xs font-medium text-gray-500 mb-1">من تاريخ</label>
+        <input 
+          v-model="filters.startDate" 
+          type="date"
+          class="block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition-colors"
+        >
+      </div>
+    </div>
+    <div v-if="showDateRange" class="w-40 flex items-end">
+      <div class="w-full">
+        <label class="block text-xs font-medium text-gray-500 mb-1">إلى تاريخ</label>
+        <input 
+          v-model="filters.endDate" 
+          type="date"
+          class="block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition-colors"
+        >
+      </div>
     </div>
 
     <!-- Department -->

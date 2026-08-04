@@ -89,120 +89,93 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
   });
 }
 
-export async function exportComprehensiveReport(env: Env, month: string): Promise<Response> {
+export async function exportComprehensiveReport(env: Env, startDate: string, endDate: string): Promise<Response> {
   const workbook = new ExcelJS.Workbook();
-  
-  // ── Sheet 1: Employees ──
-  const empSheet = workbook.addWorksheet('الموظفين');
-  empSheet.columns = [
+  const sheet = workbook.addWorksheet('التقرير الشامل');
+
+  // Load Settings for calculations
+  const { getSettings } = await import('../db/settings.db');
+  const settings = await getSettings(env);
+  const deductionRate = parseFloat(settings['late_deduction_per_minute'] ?? '1');
+  const bonusRate = parseFloat(settings['overtime_bonus_per_minute'] ?? '2');
+
+  sheet.columns = [
     { header: 'ID', key: 'id', width: 10 },
     { header: 'الاسم الكامل', key: 'full_name', width: 30 },
-    { header: 'الدور', key: 'role', width: 15 },
-    { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
     { header: 'القسم', key: 'department_name', width: 20 },
-    { header: 'الحالة', key: 'is_active', width: 15 }
-  ];
-  const empRes = await env.DB.prepare(
-    "SELECT e.id, e.full_name, e.role, e.base_salary, d.name as department_name, e.is_active FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name"
-  ).all();
-  for (const e of empRes.results as any[]) {
-    empSheet.addRow({
-      id: e.id,
-      full_name: e.full_name,
-      role: e.role === 'admin' ? 'مدير' : 'موظف',
-      base_salary: e.base_salary,
-      department_name: e.department_name ?? 'غير محدد',
-      is_active: e.is_active ? 'نشط' : 'غير نشط'
-    });
-  }
-
-  // ── Sheet 2: Attendance & Leaves ──
-  const attSheet = workbook.addWorksheet('الحضور والإجازات');
-  attSheet.columns = [
-    { header: 'الموظف', key: 'full_name', width: 30 },
-    { header: 'أيام الحضور', key: 'present_days', width: 15 },
-    { header: 'أيام الغياب', key: 'absent_days', width: 15 },
-    { header: 'إجمالي دقائق التأخير', key: 'total_late_minutes', width: 20 },
-    { header: 'الإجازات المقبولة', key: 'approved_leaves', width: 20 }
-  ];
-  
-  const attRes = await env.DB.prepare(`
-    SELECT 
-      e.id, 
-      e.full_name,
-      COUNT(a.id) as present_days,
-      SUM(a.late_minutes) as total_late_minutes
-    FROM Employees e
-    LEFT JOIN Attendance a ON e.id = a.employee_id AND a.date LIKE ? || '%'
-    WHERE e.is_active = 1
-    GROUP BY e.id
-  `).bind(month).all();
-
-  const leavesRes = await env.DB.prepare(`
-    SELECT employee_id, COUNT(id) as leaves_count 
-    FROM Leaves 
-    WHERE start_date LIKE ? || '%' AND status = 'approved'
-    GROUP BY employee_id
-  `).bind(month).all();
-  const leavesMap = new Map((leavesRes.results as any[]).map(r => [r.employee_id, r.leaves_count]));
-
-  for (const r of attRes.results as any[]) {
-    const present = r.present_days || 0;
-    const expected = 26; // Assuming 26 working days (excluding Fridays)
-    const absent = present < expected ? expected - present : 0;
-    
-    attSheet.addRow({
-      full_name: r.full_name,
-      present_days: present,
-      absent_days: absent,
-      total_late_minutes: r.total_late_minutes || 0,
-      approved_leaves: leavesMap.get(r.id) || 0
-    });
-  }
-
-  // ── Sheet 3: Salaries & Loans ──
-  const salSheet = workbook.addWorksheet('الرواتب والسلف');
-  salSheet.columns = [
-    { header: 'الموظف', key: 'full_name', width: 30 },
     { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
-    { header: 'إجمالي السلف المستقطعة', key: 'total_loans', width: 20 },
-    { header: 'صافي الراتب المتوقع', key: 'net_salary', width: 20 },
-    { header: 'حالة الدفع الفعلية', key: 'payroll_status', width: 20 }
+    { header: 'أيام الحضور', key: 'present_days', width: 15 },
+    { header: 'دقائق التأخير', key: 'late_minutes', width: 15 },
+    { header: 'قيمة خصم التأخير', key: 'late_deduction', width: 15 },
+    { header: 'دقائق الأوفر تايم', key: 'overtime_minutes', width: 15 },
+    { header: 'مكافأة الأوفر تايم', key: 'overtime_bonus', width: 15 },
+    { header: 'السلف المعتمدة', key: 'total_loans', width: 15 },
+    { header: 'الراتب النهائي (الصافي)', key: 'net_salary', width: 20 }
   ];
 
-  const payrollRes = await env.DB.prepare(`
-    SELECT e.id, e.full_name, e.base_salary, p.total_deductions, p.net_salary, p.status as payroll_status
-    FROM Employees e
-    LEFT JOIN Payroll p ON e.id = p.employee_id AND p.month = ?
-    WHERE e.is_active = 1
-    ORDER BY e.full_name
-  `).bind(month).all();
+  // Fetch employees
+  const empRes = await env.DB.prepare(
+    "SELECT e.id, e.full_name, e.base_salary, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name"
+  ).all();
 
-  const loansRes = await env.DB.prepare(`
-    SELECT employee_id, SUM(amount) as total_amount 
-    FROM Loans 
-    WHERE created_at LIKE ? || '%' AND status = 'approved'
+  // Fetch attendance aggregates
+  const attRes = await env.DB.prepare(`
+    SELECT employee_id, COUNT(id) as present_days, SUM(late_minutes) as late_minutes, SUM(overtime_minutes) as overtime_minutes
+    FROM Attendance
+    WHERE date >= ? AND date <= ?
     GROUP BY employee_id
-  `).bind(month).all();
-  const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_amount]));
+  `).bind(startDate, endDate).all();
+  
+  const attMap = new Map((attRes.results as any[]).map(r => [r.employee_id, {
+    present_days: r.present_days || 0,
+    late_minutes: r.late_minutes || 0,
+    overtime_minutes: r.overtime_minutes || 0
+  }]));
 
-  for (const row of payrollRes.results as any[]) {
-    const loans = loansMap.get(row.id) || 0;
-    salSheet.addRow({
-      full_name: row.full_name,
-      base_salary: row.base_salary,
-      total_loans: loans,
-      net_salary: row.net_salary ?? (row.base_salary - loans), // Estimate if not issued yet
-      payroll_status: row.payroll_status === 'issued' ? 'تم الدفع' : (row.payroll_status ? 'معلق' : 'لم يصدر')
+  // Fetch loans
+  const loansRes = await env.DB.prepare(`
+    SELECT employee_id, SUM(amount) as total_loans
+    FROM Loans
+    WHERE date(created_at) >= ? AND date(created_at) <= ? AND status = 'approved'
+    GROUP BY employee_id
+  `).bind(startDate, endDate).all();
+  const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_loans]));
+
+  for (const emp of empRes.results as any[]) {
+    const att = attMap.get(emp.id) || { present_days: 0, late_minutes: 0, overtime_minutes: 0 };
+    const loansAmount = loansMap.get(emp.id) || 0;
+    
+    const late_deduction = att.late_minutes * deductionRate;
+    const overtime_bonus = att.overtime_minutes * bonusRate;
+    const base_salary = emp.base_salary || 0;
+    
+    const net_salary = base_salary - late_deduction + overtime_bonus - loansAmount;
+
+    sheet.addRow({
+      id: emp.id,
+      full_name: emp.full_name,
+      department_name: emp.department_name ?? 'بدون قسم',
+      base_salary: base_salary,
+      present_days: att.present_days,
+      late_minutes: att.late_minutes,
+      late_deduction: late_deduction,
+      overtime_minutes: att.overtime_minutes,
+      overtime_bonus: overtime_bonus,
+      total_loans: loansAmount,
+      net_salary: net_salary
     });
   }
+
+  // Formatting styling
+  sheet.getRow(1).font = { bold: true };
+  sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
 
   const buffer = await workbook.xlsx.writeBuffer();
   
   return new Response(buffer as ArrayBuffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="Comprehensive_Report_${month}.xlsx"`,
+      'Content-Disposition': `attachment; filename="Comprehensive_Report_${startDate}_${endDate}.xlsx"`,
     },
   });
 }
