@@ -2,16 +2,26 @@
 -- EKLASS HR BOT — Database Schema (v2 — Fixed & Extended)
 -- ============================================================
 
+-- ── جدول الأقسام (NEW) ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS Departments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    UNIQUE NOT NULL,
+    manager_id  INTEGER DEFAULT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(manager_id) REFERENCES Employees(id)
+);
+
 -- ── جدول الموظفين ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Employees (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id TEXT    UNIQUE NOT NULL,
-    full_name   TEXT    NOT NULL,
-    role        TEXT    DEFAULT 'employee',  -- 'admin' | 'employee'
-    base_salary REAL    DEFAULT 0,
-    department  TEXT    DEFAULT NULL,
-    is_active   INTEGER DEFAULT 1,           -- FIX: soft-delete بدل حذف فعلي
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id   TEXT    UNIQUE NOT NULL,
+    full_name     TEXT    NOT NULL,
+    role          TEXT    DEFAULT 'employee',  -- 'admin' | 'manager' | 'employee'
+    base_salary   REAL    DEFAULT 0,
+    department_id INTEGER DEFAULT NULL,
+    is_active     INTEGER DEFAULT 1,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(department_id) REFERENCES Departments(id)
 );
 
 -- ── جدول الإعدادات ──────────────────────────────────────────

@@ -5,27 +5,27 @@ import { Env, Employee } from '../types';
 
 export async function getEmployeeByTelegramId(env: Env, telegramId: string): Promise<Employee | null> {
   return await env.DB.prepare(
-    "SELECT * FROM Employees WHERE telegram_id = ? AND is_active = 1"
+    "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.telegram_id = ? AND e.is_active = 1"
   ).bind(telegramId).first() as Employee | null;
 }
 
 export async function getEmployeeById(env: Env, id: number, includeInactive: boolean = false): Promise<Employee | null> {
   const query = includeInactive 
-    ? "SELECT * FROM Employees WHERE id = ?"
-    : "SELECT * FROM Employees WHERE id = ? AND is_active = 1";
+    ? "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.id = ?"
+    : "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.id = ? AND e.is_active = 1";
   return await env.DB.prepare(query).bind(id).first() as Employee | null;
 }
 
 export async function getAllEmployees(env: Env): Promise<Employee[]> {
   const result = await env.DB.prepare(
-    "SELECT * FROM Employees WHERE is_active = 1 ORDER BY full_name"
+    "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name"
   ).all();
   return result.results as unknown as Employee[];
 }
 
 export async function getAdmins(env: Env): Promise<Employee[]> {
   const result = await env.DB.prepare(
-    "SELECT * FROM Employees WHERE role = 'admin' AND is_active = 1"
+    "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.role = 'admin' AND e.is_active = 1"
   ).all();
   return result.results as unknown as Employee[];
 }
@@ -35,7 +35,7 @@ export async function addEmployee(
   telegramId: string,
   fullName: string,
   baseSalary: number,
-  department: string,
+  departmentId: number | null,
   role: 'admin' | 'employee' = 'employee'
 ): Promise<number> {
   // Check if an employee (active or inactive) already exists with this telegramId
@@ -46,14 +46,14 @@ export async function addEmployee(
   if (existing) {
     // Reactivate and update their info
     await env.DB.prepare(
-      "UPDATE Employees SET full_name = ?, base_salary = ?, department = ?, role = ?, is_active = 1 WHERE id = ?"
-    ).bind(fullName, baseSalary, department, role, existing.id).run();
+      "UPDATE Employees SET full_name = ?, base_salary = ?, department_id = ?, role = ?, is_active = 1 WHERE id = ?"
+    ).bind(fullName, baseSalary, departmentId, role, existing.id).run();
     return existing.id;
   } else {
     // Insert new employee
     const result = await env.DB.prepare(
-      "INSERT INTO Employees (telegram_id, full_name, base_salary, department, role) VALUES (?, ?, ?, ?, ?)"
-    ).bind(telegramId, fullName, baseSalary, department, role).run();
+      "INSERT INTO Employees (telegram_id, full_name, base_salary, department_id, role) VALUES (?, ?, ?, ?, ?)"
+    ).bind(telegramId, fullName, baseSalary, departmentId, role).run();
     return result.meta.last_row_id as number;
   }
 }

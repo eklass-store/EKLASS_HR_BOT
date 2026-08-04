@@ -6,7 +6,7 @@ import { Env } from '../types';
 
 export async function exportEmployeesExcel(env: Env): Promise<Response> {
   const result = await env.DB.prepare(
-    "SELECT id, telegram_id, full_name, role, base_salary, department, is_active, created_at FROM Employees ORDER BY full_name"
+    "SELECT e.id, e.telegram_id, e.full_name, e.role, e.base_salary, d.name as department_name, e.is_active, e.created_at FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name"
   ).all();
   
   const workbook = new ExcelJS.Workbook();
@@ -18,7 +18,7 @@ export async function exportEmployeesExcel(env: Env): Promise<Response> {
     { header: 'الاسم الكامل', key: 'full_name', width: 30 },
     { header: 'الدور', key: 'role', width: 15 },
     { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
-    { header: 'القسم', key: 'department', width: 20 },
+    { header: 'القسم', key: 'department_name', width: 20 },
     { header: 'الحالة', key: 'is_active', width: 15 },
     { header: 'تاريخ التسجيل', key: 'created_at', width: 20 }
   ];
@@ -30,7 +30,7 @@ export async function exportEmployeesExcel(env: Env): Promise<Response> {
       full_name: e.full_name,
       role: e.role === 'admin' ? 'مدير' : 'موظف',
       base_salary: e.base_salary,
-      department: e.department ?? 'غير محدد',
+      department_name: e.department_name ?? 'غير محدد',
       is_active: e.is_active ? 'نشط' : 'محذوف',
       created_at: e.created_at
     });

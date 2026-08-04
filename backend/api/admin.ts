@@ -45,7 +45,7 @@ export async function handleAdminRoutes(
       const data = await request.json() as any;
       if (!data.telegram_id || !data.full_name) return jsonResponse({ error: 'Missing fields' }, 400, env);
       try {
-        const id = await addEmployee(env, data.telegram_id, data.full_name, data.base_salary || 0, data.department || '', data.role || 'employee');
+        const id = await addEmployee(env, data.telegram_id, data.full_name, data.base_salary || 0, data.department_id || null, data.role || 'employee');
         await logAction(env, adminId, 'ADD_EMPLOYEE', `Added employee ${data.full_name}`);
         return jsonResponse({ success: true, id }, 200, env);
       } catch (err: any) {
@@ -57,13 +57,30 @@ export async function handleAdminRoutes(
   const empMatch = path.match(/^\/api\/admin\/employees\/(\d+)$/);
   if (empMatch) {
     const empId = parseInt(empMatch[1]);
+    if (method === 'GET') {
+      const emp = await getEmployeeById(env, empId, true);
+      if (!emp) return jsonResponse({ error: 'Not found' }, 404, env);
+      
+      const [attendance, leaves, loans] = await Promise.all([
+        env.DB.prepare("SELECT * FROM Attendance WHERE employee_id = ? ORDER BY date DESC LIMIT 30").bind(empId).all(),
+        env.DB.prepare("SELECT * FROM Leaves WHERE employee_id = ? ORDER BY created_at DESC LIMIT 20").bind(empId).all(),
+        env.DB.prepare("SELECT * FROM Loans WHERE employee_id = ? ORDER BY created_at DESC LIMIT 20").bind(empId).all(),
+      ]);
+
+      return jsonResponse({
+        ...emp,
+        attendance: attendance.results,
+        leaves: leaves.results,
+        loans: loans.results
+      }, 200, env);
+    }
     if (method === 'PUT') {
       const data = await request.json() as any;
       if (data.base_salary !== undefined) await updateEmployeeSalary(env, empId, data.base_salary);
       if (data.role !== undefined) await updateEmployeeRole(env, empId, data.role);
       if (data.full_name && data.telegram_id) {
-        await env.DB.prepare('UPDATE Employees SET full_name = ?, department = ?, is_active = ? WHERE id = ?')
-          .bind(data.full_name, data.department || '', data.is_active !== undefined ? (data.is_active ? 1 : 0) : 1, empId).run();
+        await env.DB.prepare('UPDATE Employees SET full_name = ?, department_id = ?, is_active = ? WHERE id = ?')
+          .bind(data.full_name, data.department_id || null, data.is_active !== undefined ? (data.is_active ? 1 : 0) : 1, empId).run();
       }
       await logAction(env, adminId, 'UPDATE_EMPLOYEE', `Updated employee ID ${empId}`);
       return jsonResponse({ success: true }, 200, env);
@@ -71,6 +88,37 @@ export async function handleAdminRoutes(
     if (method === 'DELETE') {
       await softDeleteEmployee(env, empId);
       await logAction(env, adminId, 'DELETE_EMPLOYEE', `Soft deleted employee ID ${empId}`);
+      return jsonResponse({ success: true }, 200, env);
+    }
+  }
+
+  // ── Departments ──────────────────────────────────────────────
+  if (path === '/api/admin/departments') {
+    if (method === 'POST') {
+      const data = await request.json() as any;
+      if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
+      const { addDepartment } = await import('../db/departments.db');
+      const id = await addDepartment(env, data.name, data.manager_id || null);
+      await logAction(env, adminId, 'ADD_DEPARTMENT', `Added department ${data.name}`);
+      return jsonResponse({ success: true, id }, 200, env);
+    }
+  }
+
+  const deptMatch = path.match(/^\/api\/admin\/departments\/(\d+)$/);
+  if (deptMatch) {
+    const deptId = parseInt(deptMatch[1]);
+    if (method === 'PUT') {
+      const data = await request.json() as any;
+      if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
+      const { updateDepartment } = await import('../db/departments.db');
+      await updateDepartment(env, deptId, data.name, data.manager_id || null);
+      await logAction(env, adminId, 'UPDATE_DEPARTMENT', `Updated department ID ${deptId}`);
+      return jsonResponse({ success: true }, 200, env);
+    }
+    if (method === 'DELETE') {
+      const { deleteDepartment } = await import('../db/departments.db');
+      await deleteDepartment(env, deptId);
+      await logAction(env, adminId, 'DELETE_DEPARTMENT', `Deleted department ID ${deptId}`);
       return jsonResponse({ success: true }, 200, env);
     }
   }

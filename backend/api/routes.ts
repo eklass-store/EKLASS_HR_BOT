@@ -166,7 +166,17 @@ export async function handleApiRoutes(
   // ── GET /api/employees ─────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/employees') {
     const result = await env.DB.prepare(
-      "SELECT id, full_name, role, department, base_salary, telegram_id, is_active, created_at FROM Employees ORDER BY full_name"
+      "SELECT e.id, e.full_name, e.role, e.department_id, d.name as department_name, e.base_salary, e.telegram_id, e.is_active, e.created_at FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name"
+    ).all();
+    return new Response(JSON.stringify(result.results), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
+    });
+  }
+
+  // ── GET /api/departments ─────────────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/departments') {
+    const result = await env.DB.prepare(
+      "SELECT * FROM Departments ORDER BY name"
     ).all();
     return new Response(JSON.stringify(result.results), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },

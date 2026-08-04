@@ -6,7 +6,11 @@
       <main class="flex-1 relative overflow-y-auto focus:outline-none bg-gray-50/50">
         <div class="py-8">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-            <router-view />
+            <router-view v-slot="{ Component }">
+              <transition name="fade" mode="out-in">
+                <component :is="Component" />
+              </transition>
+            </router-view>
           </div>
         </div>
       </main>

@@ -20,7 +20,8 @@ export interface Employee {
   full_name: string;
   role: 'admin' | 'employee';
   base_salary: number;
-  department: string | null;
+  department_id: number | null;
+  department_name?: string | null;
   is_active: number; // 1 = active, 0 = soft-deleted
   created_at: string;
 }
@@ -77,4 +78,11 @@ export interface DailyAttendanceRow {
   check_in_time: string | null;
   check_out_time: string | null;
   late_minutes: number;
+}
+
+export interface Department {
+  id: number;
+  name: string;
+  manager_id: number | null;
+  created_at: string;
 }

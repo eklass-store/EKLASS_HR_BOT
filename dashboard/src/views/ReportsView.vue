@@ -6,13 +6,11 @@
         <p class="mt-1 text-sm text-gray-500">تحليل تفصيلي للإجازات، السلف، وحالة الموظفين.</p>
       </div>
       <div class="mt-4 sm:mt-0">
-        <select v-model="selectedMonth" @change="processData" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm px-4 py-2 border font-medium">
-          <option value="all">كل الأوقات</option>
-          <option value="2023-09">سبتمبر 2023</option>
-          <option value="2023-10">أكتوبر 2023</option>
-          <option value="2023-11">نوفمبر 2023</option>
-          <option value="2023-12">ديسمبر 2023</option>
-        </select>
+        <FilterBar 
+          :showMonth="true" 
+          :availableMonths="availableMonths" 
+          @filter="(f) => { selectedMonth = f.month || 'all'; processData() }" 
+        />
       </div>
     </div>
 
@@ -82,10 +80,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { apiFetch } from '../api/client'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js'
 import { Pie, Bar } from 'vue-chartjs'
+import FilterBar from '../components/FilterBar.vue'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title)
 
@@ -99,6 +98,17 @@ const employees = ref<any[]>([])
 const activeEmployees = ref(0)
 const approvedLeaves = ref(0)
 const totalLoansAmount = ref(0)
+
+const availableMonths = computed(() => {
+  const months = new Set<string>()
+  allLeaves.value.forEach(l => {
+    if (l.start_date) months.add(l.start_date.substring(0, 7))
+  })
+  allLoans.value.forEach(l => {
+    if (l.created_at) months.add(l.created_at.substring(0, 7))
+  })
+  return Array.from(months).sort().reverse()
+})
 
 const leavesChartData = ref<any>(null)
 const statusChartData = ref<any>(null)
