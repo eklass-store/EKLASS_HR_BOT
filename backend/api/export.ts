@@ -6,7 +6,7 @@ import { Env } from '../types';
 
 export async function exportEmployeesExcel(env: Env): Promise<Response> {
   const result = await env.DB.prepare(
-    "SELECT e.id, e.telegram_id, e.full_name, e.role, e.base_salary, d.name as department_name, e.is_active, e.created_at FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name"
+    "SELECT e.id, e.telegram_id, e.full_name, e.role, e.base_salary, d.name as department_name, e.is_active, e.created_at FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name LIMIT 5000"
   ).all();
   
   const workbook = new ExcelJS.Workbook();
@@ -54,6 +54,7 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
     LEFT JOIN Payroll p ON e.id = p.employee_id AND p.month = ?
     WHERE e.is_active = 1
     ORDER BY e.full_name
+    LIMIT 5000
   `).bind(month).all();
 
   const workbook = new ExcelJS.Workbook();
@@ -113,9 +114,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     { header: 'الراتب النهائي (الصافي)', key: 'net_salary', width: 20 }
   ];
 
-  // Fetch employees
   const empRes = await env.DB.prepare(
-    "SELECT e.id, e.full_name, e.base_salary, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name"
+    "SELECT e.id, e.full_name, e.base_salary, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name LIMIT 5000"
   ).all();
 
   // Fetch attendance aggregates
@@ -124,6 +124,7 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     FROM Attendance
     WHERE date >= ? AND date <= ?
     GROUP BY employee_id
+    LIMIT 5000
   `).bind(startDate, endDate).all();
   
   const attMap = new Map((attRes.results as any[]).map(r => [r.employee_id, {
@@ -138,6 +139,7 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     FROM Loans
     WHERE date(created_at) >= ? AND date(created_at) <= ? AND status = 'approved'
     GROUP BY employee_id
+    LIMIT 5000
   `).bind(startDate, endDate).all();
   const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_loans]));
 

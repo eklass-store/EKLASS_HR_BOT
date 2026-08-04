@@ -31,6 +31,8 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
     } catch (err: any) {
       console.error('[Bot Error]', err);
       try {
+        const errorDetails = err instanceof Error ? err.stack || err.message : JSON.stringify(err);
+        await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'WEBHOOK_ERROR', ?)").bind(String(errorDetails).substring(0, 500)).run().catch(() => {});
         if (ctx.chat) {
           await ctx.reply(`❌ حدث خطأ داخلي في الخادم. يرجى المحاولة لاحقاً.`, { parse_mode: 'HTML' }).catch(() => {});
         }
@@ -63,6 +65,10 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
     return await cb(request);
   } catch (err: any) {
     console.error('[Webhook Error]', err);
+    try {
+      const errorDetails = err instanceof Error ? err.stack || err.message : JSON.stringify(err);
+      await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'WEBHOOK_CRITICAL_ERROR', ?)").bind(String(errorDetails).substring(0, 500)).run().catch(() => {});
+    } catch (_) {}
     return new Response('OK', { status: 200 });
   }
 };

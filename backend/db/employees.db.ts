@@ -16,10 +16,10 @@ export async function getEmployeeById(env: Env, id: number, includeInactive: boo
   return await env.DB.prepare(query).bind(id).first() as Employee | null;
 }
 
-export async function getAllEmployees(env: Env): Promise<Employee[]> {
+export async function getAllEmployees(env: Env, limit: number = 5000, offset: number = 0): Promise<Employee[]> {
   const result = await env.DB.prepare(
-    "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name"
-  ).all();
+    "SELECT e.*, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name LIMIT ? OFFSET ?"
+  ).bind(limit, offset).all();
   return result.results as unknown as Employee[];
 }
 

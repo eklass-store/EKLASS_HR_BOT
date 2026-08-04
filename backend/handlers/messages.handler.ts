@@ -163,6 +163,11 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       }
 
       const leaveId = await createLeave(env, emp.id, startDate, endDate, type, reason);
+      if (!leaveId) {
+        await clearState(env, tid);
+        await ctx.reply('⚠️ عذراً، لم يتم تسجيل الإجازة لوجود تداخل مع إجازة أخرى قيد الانتظار أو معتمدة.', { reply_markup: getMainMenu(emp.role === 'admin') });
+        return;
+      }
 
       // إشعار الأدمن
       const admins = await getAdmins(env);

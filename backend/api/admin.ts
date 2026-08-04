@@ -9,8 +9,19 @@ import { logAction } from '../db/audit.db';
 import { issuePayroll, hasPayrollForMonth } from '../db/payroll.db';
 import { getTotalLateMinutes } from '../db/attendance.db';
 import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../db/loans.db';
-import { getDaysInMonth, calcLateMinutes } from '../utils/time';
+import { getDaysInMonth, calcLateMinutes, isValidDate } from '../utils/time';
 import { escapeMarkdown } from '../utils/markdown';
+
+// ── Interfaces ───────────────────────────────────────────────
+interface AddEmployeeReq { telegram_id: string; full_name: string; base_salary?: number; department_id?: number; role?: string; }
+interface UpdateEmployeeReq { base_salary?: number; role?: string; is_active?: boolean; full_name?: string; department_id?: number; telegram_id?: string; }
+interface MessageReq { message: string; }
+interface DepartmentReq { name: string; manager_id?: number; }
+interface StatusReq { status: string; }
+interface SettingReq { key: string; value: string | number | boolean; }
+interface HolidayReq { date: string; description?: string; }
+interface PayrollReq { month: string; }
+// ─────────────────────────────────────────────────────────────
 
 // Helper for CORS headers
 const getCorsHeaders = (env: Env) => ({
@@ -42,8 +53,18 @@ export async function handleAdminRoutes(
   // ── Employees ────────────────────────────────────────────────
   if (path === '/api/admin/employees') {
     if (method === 'POST') {
-      const data = await request.json() as any;
+      const data = await request.json() as AddEmployeeReq;
       if (!data.telegram_id || !data.full_name) return jsonResponse({ error: 'Missing fields' }, 400, env);
+      if (typeof data.telegram_id !== 'string' || data.telegram_id.length > 30 || !/^\d+$/.test(data.telegram_id)) {
+        return jsonResponse({ error: 'Invalid telegram_id' }, 400, env);
+      }
+      if (typeof data.full_name !== 'string' || data.full_name.length > 100 || data.full_name.length < 2) {
+        return jsonResponse({ error: 'Invalid full_name' }, 400, env);
+      }
+      const salary = Number(data.base_salary) || 0;
+      if (isNaN(salary) || salary < 0) {
+        return jsonResponse({ error: 'Invalid base_salary' }, 400, env);
+      }
       try {
         const id = await addEmployee(env, data.telegram_id, data.full_name, data.base_salary || 0, data.department_id || null, data.role || 'employee');
         await logAction(env, adminId, 'ADD_EMPLOYEE', `Added employee ${data.full_name}`);
@@ -57,7 +78,7 @@ export async function handleAdminRoutes(
   const empMessageMatch = path.match(/^\/api\/admin\/employees\/(\d+)\/message$/);
   if (empMessageMatch && method === 'POST') {
     const empId = parseInt(empMessageMatch[1]);
-    const data = await request.json() as any;
+    const data = await request.json() as MessageReq;
     if (!data.message) return jsonResponse({ error: 'Message required' }, 400, env);
     
     const emp = await getEmployeeById(env, empId, true);
@@ -99,7 +120,7 @@ export async function handleAdminRoutes(
       }, 200, env);
     }
     if (method === 'PUT') {
-      const data = await request.json() as any;
+      const data = await request.json() as UpdateEmployeeReq;
       if (data.base_salary !== undefined) await updateEmployeeSalary(env, empId, data.base_salary);
       if (data.role !== undefined) await updateEmployeeRole(env, empId, data.role);
       if (data.is_active !== undefined && !data.full_name) {
@@ -123,7 +144,7 @@ export async function handleAdminRoutes(
   if (path === '/api/admin/departments') {
     if (method === 'POST') {
       try {
-        const data = await request.json() as any;
+        const data = await request.json() as DepartmentReq;
         if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
         const { addDepartment } = await import('../db/departments.db');
         const id = await addDepartment(env, data.name, data.manager_id || null);
@@ -140,7 +161,7 @@ export async function handleAdminRoutes(
     const deptId = parseInt(deptMatch[1]);
     if (method === 'PUT') {
       try {
-        const data = await request.json() as any;
+        const data = await request.json() as DepartmentReq;
         if (!data.name) return jsonResponse({ error: 'Missing name' }, 400, env);
         const { updateDepartment } = await import('../db/departments.db');
         await updateDepartment(env, deptId, data.name, data.manager_id || null);
@@ -173,7 +194,7 @@ export async function handleAdminRoutes(
   const leaveMatch = path.match(/^\/api\/admin\/leaves\/(\d+)\/status$/);
   if (leaveMatch && method === 'PUT') {
     const leaveId = parseInt(leaveMatch[1]);
-    const { status } = await request.json() as any;
+    const { status } = await request.json() as StatusReq;
     if (!['approved', 'rejected'].includes(status)) return jsonResponse({ error: 'Invalid status' }, 400, env);
 
     const leave = await getLeaveById(env, leaveId);
@@ -213,7 +234,7 @@ export async function handleAdminRoutes(
   const loanMatch = path.match(/^\/api\/admin\/loans\/(\d+)\/status$/);
   if (loanMatch && method === 'PUT') {
     const loanId = parseInt(loanMatch[1]);
-    const { status } = await request.json() as any;
+    const { status } = await request.json() as StatusReq;
     if (!['approved', 'rejected'].includes(status)) return jsonResponse({ error: 'Invalid status' }, 400, env);
 
     const loan = await getLoanById(env, loanId);
@@ -240,7 +261,7 @@ export async function handleAdminRoutes(
 
   // ── Broadcast ────────────────────────────────────────────────
   if (path === '/api/admin/broadcast' && method === 'POST') {
-    const { message } = await request.json() as any;
+    const { message } = await request.json() as MessageReq;
     if (!message) return jsonResponse({ error: 'Message required' }, 400, env);
 
     await createAnnouncement(env, message, adminId || 0);
@@ -248,18 +269,22 @@ export async function handleAdminRoutes(
 
     const employees = await getAllEmployees(env);
     let sentCount = 0;
-    for (const e of employees) {
-      try {
-        const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+    
+    // TASK 9: Process in parallel chunks to avoid timeout
+    const chunkSize = 50;
+    for (let i = 0; i < employees.length; i += chunkSize) {
+      const chunk = employees.slice(i, i + chunkSize);
+      const promises = chunk.map(e => 
+        fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: e.telegram_id, text: `📢 *تعميم إداري:*\n\n${escapeMarkdown(message)}`, parse_mode: 'Markdown' }),
-        });
-        if (res.ok) {
-          sentCount++;
-        }
-      } catch (_) {}
+        }).then(res => res.ok ? 1 : 0).catch(() => 0)
+      );
+      const results = await Promise.all(promises);
+      sentCount += results.reduce((a, b) => a + (b as number), 0);
     }
+    
     return jsonResponse({ success: true, sentCount }, 200, env);
   }
 
@@ -270,7 +295,7 @@ export async function handleAdminRoutes(
       return jsonResponse(settings, 200, env);
     }
     if (method === 'PUT') {
-      const { key, value } = await request.json() as any;
+      const { key, value } = await request.json() as SettingReq;
       if (!key || value === undefined) return jsonResponse({ error: 'Missing fields' }, 400, env);
       await updateSetting(env, key, String(value));
       await logAction(env, adminId, 'UPDATE_SETTING', `Setting ${key} updated`);
@@ -285,7 +310,10 @@ export async function handleAdminRoutes(
       return jsonResponse(res.results, 200, env);
     }
     if (method === 'POST') {
-      const { date, description } = await request.json() as any;
+      const { date, description } = await request.json() as HolidayReq;
+      if (!date || !isValidDate(date)) {
+        return jsonResponse({ error: 'Invalid date format, expected YYYY-MM-DD' }, 400, env);
+      }
       const success = await addHoliday(env, date, description || '');
       if (success) {
         await logAction(env, adminId, 'ADD_HOLIDAY', `Added holiday ${date}`);
@@ -317,38 +345,73 @@ export async function handleAdminRoutes(
 
   // ── Payroll ──────────────────────────────────────────────────
   if (path === '/api/admin/payroll/issue' && method === 'POST') {
-    const { month } = await request.json() as any;
+    const { month } = await request.json() as PayrollReq;
     if (!month) return jsonResponse({ error: 'Month is required' }, 400, env);
 
     const settings = await getSettings(env);
     const startTime = settings['work_start_time'] ?? '09:00';
     const endTime = settings['work_end_time'] ?? '17:00';
     const workMinutes = calcLateMinutes(endTime, startTime) || 480;
-    const daysInMonth = getDaysInMonth(month);
 
     const employees = await getAllEmployees(env);
+    
+    // TASK 10: Fetch all existing payrolls, late minutes, and loans in batch
+    const existingPayrolls = await env.DB.prepare("SELECT employee_id FROM Payroll WHERE month = ?").bind(month).all();
+    const existingEmpIds = new Set((existingPayrolls.results as any[]).map(r => r.employee_id));
+
+    const lateRes = await env.DB.prepare("SELECT employee_id, SUM(late_minutes) as total_late FROM Attendance WHERE date LIKE ? GROUP BY employee_id").bind(`${month}-%`).all();
+    const lateMap = new Map((lateRes.results as any[]).map(r => [r.employee_id, r.total_late || 0]));
+
+    const loansRes = await env.DB.prepare("SELECT employee_id, SUM(amount) as total_loan FROM Loans WHERE status = 'approved' GROUP BY employee_id").bind().all();
+    const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_loan || 0]));
+
     let issuedCount = 0;
     let skippedCount = 0;
+    const batchStatements: any[] = [];
 
     for (const employee of employees) {
-      if (await hasPayrollForMonth(env, employee.id, month)) {
+      if (existingEmpIds.has(employee.id)) {
         skippedCount++;
         continue;
       }
 
+      const dynamicMonthSalary = employee.base_salary; // TASK 6: Fixed salary calculation
       const dailyRate = employee.base_salary / 30;
-      const dynamicMonthSalary = dailyRate * daysInMonth;
       const minuteRate = dailyRate / workMinutes;
 
-      const lateMinutes = await getTotalLateMinutes(env, employee.id, month);
+      const lateMinutes = lateMap.get(employee.id) || 0;
       const lateDeduction = lateMinutes * minuteRate;
-      const activeLoan = await getTotalActiveLoan(env, employee.id);
-      const totalDed = lateDeduction + activeLoan;
+      
+      const activeLoan = loansMap.get(employee.id) || 0;
+      
+      // TASK 7: Deduct loan only up to available salary
+      const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction);
+      const loanDeducted = Math.min(activeLoan, availableForLoan);
+      
+      const totalDed = lateDeduction + loanDeducted;
       const netSalary = Math.max(0, dynamicMonthSalary - totalDed);
 
-      await issuePayroll(env, employee.id, month, dynamicMonthSalary, totalDed, netSalary);
-      if (activeLoan > 0) await markEmployeeLoansAsPaid(env, employee.id);
+      // TASK 8: Prepare batch statements
+      batchStatements.push(
+        env.DB.prepare("INSERT INTO Payroll (employee_id, month, base_salary, total_deductions, net_salary, status) VALUES (?, ?, ?, ?, ?, 'issued')")
+          .bind(employee.id, month, dynamicMonthSalary, totalDed, netSalary)
+      );
+
+      if (activeLoan > 0 && loanDeducted === activeLoan) {
+        batchStatements.push(
+          env.DB.prepare("UPDATE Loans SET status = 'paid' WHERE employee_id = ? AND status = 'approved'")
+            .bind(employee.id)
+        );
+      }
+      
       issuedCount++;
+    }
+
+    if (batchStatements.length > 0) {
+      for (let i = 0; i < batchStatements.length; i += 100) {
+        const chunk = batchStatements.slice(i, i + 100);
+        await env.DB.batch(chunk);
+      }
     }
 
     await logAction(env, adminId, 'ISSUE_PAYROLL', `Issued payroll for ${month} (${issuedCount} issued)`);

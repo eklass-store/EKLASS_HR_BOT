@@ -114,6 +114,13 @@ CREATE TABLE IF NOT EXISTS ConversationState (
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ── جدول رموز المصادقة (NEW) ──────────────────────────────
+-- لمنع هجمات Replay Attacks في تسجيل دخول تليجرام
+CREATE TABLE IF NOT EXISTS AuthNonces (
+    hash        TEXT PRIMARY KEY,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ── جدول سجل التدقيق (Audit Logs) ───────────────────────────
 CREATE TABLE IF NOT EXISTS AuditLogs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,3 +150,5 @@ CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON Attendance(employee_i
 CREATE INDEX IF NOT EXISTS idx_leaves_employee_status ON Leaves(employee_id, status);
 CREATE INDEX IF NOT EXISTS idx_loans_employee_status ON Loans(employee_id, status);
 CREATE INDEX IF NOT EXISTS idx_payroll_employee_month ON Payroll(employee_id, month);
+CREATE INDEX IF NOT EXISTS idx_leaves_created_at ON Leaves(created_at);
+CREATE INDEX IF NOT EXISTS idx_loans_created_at ON Loans(created_at);

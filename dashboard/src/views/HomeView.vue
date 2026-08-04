@@ -47,7 +47,7 @@
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8">
         <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
           <h3 class="text-lg font-bold text-gray-900">حضور اليوم (أحدث السجلات)</h3>
-          <router-link to="/payroll" class="text-sm font-medium text-primary-600 hover:text-primary-700">عرض الكل &larr;</router-link>
+          <router-link to="/attendance-daily" class="text-sm font-medium text-primary-600 hover:text-primary-700">عرض الكل &larr;</router-link>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-right">

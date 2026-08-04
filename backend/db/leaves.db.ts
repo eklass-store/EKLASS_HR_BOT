@@ -4,18 +4,21 @@
 import { Env, Leave } from '../types';
 
 /** ينشئ طلب إجازة ويرجع الـ ID مباشرة (FIX BUG-04) */
-export async function createLeave(
-  env: Env,
-  employeeId: number,
-  startDate: string,
-  endDate: string,
-  type: string,
-  reason: string
-): Promise<number> {
-  const result = await env.DB.prepare(
-    "INSERT INTO Leaves (employee_id, start_date, end_date, type, status, reason) VALUES (?, ?, ?, ?, 'pending', ?)"
-  ).bind(employeeId, startDate, endDate, type, reason).run();
-  return result.meta.last_row_id as number; // FIX BUG-04: last_row_id بدل SELECT آخر ID
+export async function createLeave(env: Env, employeeId: number, startDate: string, endDate: string, type: string, reason: string): Promise<number | null> {
+  // TASK 13: Atomic insert to prevent race conditions
+  const result = await env.DB.prepare(`
+    INSERT INTO Leaves (employee_id, start_date, end_date, type, status, reason)
+    SELECT ?, ?, ?, ?, 'pending', ?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM Leaves 
+      WHERE employee_id = ? AND status != 'rejected' AND (start_date <= ? AND end_date >= ?)
+    )
+  `).bind(employeeId, startDate, endDate, type, reason, employeeId, endDate, startDate).run();
+  
+  if (result.meta && result.meta.changes > 0) {
+    return result.meta.last_row_id as number;
+  }
+  return null;
 }
 
 export async function getLeaveById(env: Env, id: number): Promise<Leave | null> {
