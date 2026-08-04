@@ -330,7 +330,7 @@ const processData = () => {
 
 const exportComprehensive = async () => {
   if (selectedMonth.value === 'all') {
-    toast.error('يرجى اختيار شهر محدد أولاً لاستخراج التقرير الشامل')
+    toast.showToast('يرجى اختيار شهر محدد أولاً لاستخراج التقرير الشامل', 'error')
     return
   }
 
@@ -355,9 +355,9 @@ const exportComprehensive = async () => {
     document.body.appendChild(a)
     a.click()
     window.URL.revokeObjectURL(url)
-    toast.success('تم تصدير تقرير إغلاق الشهر بنجاح')
+    toast.showToast('تم تصدير تقرير إغلاق الشهر بنجاح', 'success')
   } catch (err: any) {
-    toast.error(err.message || 'حدث خطأ أثناء التصدير')
+    toast.showToast(err.message || 'حدث خطأ أثناء التصدير', 'error')
   } finally {
     exporting.value = false
   }

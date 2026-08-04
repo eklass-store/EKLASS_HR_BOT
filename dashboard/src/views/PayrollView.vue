@@ -66,11 +66,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { apiFetch } from '../api/client'
-import { useAuthStore } from '../stores/auth'
 
 const records = ref<any[]>([])
 const loading = ref(true)
-const authStore = useAuthStore()
 
 const loadData = async () => {
   try {
