@@ -22,10 +22,16 @@ export async function getLoanById(env: Env, id: number): Promise<Loan | null> {
   ).bind(id).first() as Loan | null;
 }
 
-export async function updateLoanStatus(env: Env, id: number, status: string): Promise<void> {
-  await env.DB.prepare(
-    "UPDATE Loans SET status = ? WHERE id = ?"
-  ).bind(status, id).run();
+export async function updateLoanStatus(env: Env, id: number, status: string, approvedBy: number | null = null): Promise<void> {
+  if (approvedBy !== null) {
+    await env.DB.prepare(
+      "UPDATE Loans SET status = ?, approved_by = ? WHERE id = ?"
+    ).bind(status, approvedBy, id).run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE Loans SET status = ? WHERE id = ?"
+    ).bind(status, id).run();
+  }
 }
 
 /** آخر 5 سلف للموظف */

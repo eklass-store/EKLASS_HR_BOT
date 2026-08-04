@@ -1,23 +1,50 @@
 <template>
-  <div class="space-y-8">
+  <div class="space-y-6">
     <div>
       <h3 class="text-xl font-bold leading-6 text-gray-900">إدارة الطلبات</h3>
-      <p class="mt-1 text-sm text-gray-500">مراجعة طلبات الإجازات والسلف المقدمة من الموظفين واتخاذ إجراء بشأنها.</p>
+      <p class="mt-1 text-sm text-gray-500">مراجعة طلبات الإجازات والسلف واتخاذ إجراء بشأنها.</p>
     </div>
 
-    <!-- Leaves -->
-    <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-5 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-        <h3 class="text-lg leading-6 font-bold text-gray-900">طلبات الإجازات</h3>
-      </div>
+    <!-- Tabs -->
+    <div class="border-b border-gray-200">
+      <nav class="-mb-px flex space-x-8 space-x-reverse" aria-label="Tabs">
+        <button
+          @click="activeTab = 'leaves'"
+          :class="[
+            activeTab === 'leaves'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+          ]"
+        >
+          طلبات الإجازات
+          <span v-if="pendingLeavesCount > 0" class="mr-2 bg-red-100 text-red-600 py-0.5 px-2.5 rounded-full text-xs">{{ pendingLeavesCount }}</span>
+        </button>
+        <button
+          @click="activeTab = 'loans'"
+          :class="[
+            activeTab === 'loans'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+          ]"
+        >
+          طلبات السلف
+          <span v-if="pendingLoansCount > 0" class="mr-2 bg-red-100 text-red-600 py-0.5 px-2.5 rounded-full text-xs">{{ pendingLoansCount }}</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Leaves Tab -->
+    <div v-if="activeTab === 'leaves'" class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-white">
+          <thead class="bg-gray-50">
             <tr>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الموظف</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">النوع والسبب</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">التاريخ</th>
-              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>
+              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الحالة / بواسطة</th>
               <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">الإجراءات</th>
             </tr>
           </thead>
@@ -34,16 +61,21 @@
                 <span class="font-bold text-gray-900">{{ translateType(leave.type) }}</span><br/>
                 {{ leave.reason || 'لم يتم تحديد سبب' }}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium" dir="ltr" style="text-align: right;">{{ leave.start_date }} <br/> {{ leave.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium" dir="ltr" style="text-align: right;">
+                {{ leave.start_date }} <br/> {{ leave.end_date }}
+              </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border"
-                  :class="{
-                    'bg-yellow-50 text-yellow-700 border-yellow-200': leave.status === 'pending',
-                    'bg-green-50 text-green-700 border-green-200': leave.status === 'approved',
-                    'bg-red-50 text-red-700 border-red-200': leave.status === 'rejected'
-                  }">
-                  {{ translateStatus(leave.status) }}
-                </span>
+                <div class="flex flex-col space-y-1">
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border w-fit"
+                    :class="{
+                      'bg-yellow-50 text-yellow-700 border-yellow-200': leave.status === 'pending',
+                      'bg-green-50 text-green-700 border-green-200': leave.status === 'approved',
+                      'bg-red-50 text-red-700 border-red-200': leave.status === 'rejected'
+                    }">
+                    {{ translateStatus(leave.status) }}
+                  </span>
+                  <span v-if="leave.approved_by_name" class="text-xs text-gray-500 font-medium">بواسطة: {{ leave.approved_by_name }}</span>
+                </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
                 <div v-if="leave.status === 'pending'" class="space-x-2 space-x-reverse flex justify-end">
@@ -57,19 +89,16 @@
       </div>
     </div>
 
-    <!-- Loans -->
-    <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-5 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-        <h3 class="text-lg leading-6 font-bold text-gray-900">طلبات السلف</h3>
-      </div>
+    <!-- Loans Tab -->
+    <div v-if="activeTab === 'loans'" class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-white">
+          <thead class="bg-gray-50">
             <tr>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الموظف</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">المبلغ</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">السبب</th>
-              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>
+              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الحالة / بواسطة</th>
               <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">الإجراءات</th>
             </tr>
           </thead>
@@ -85,14 +114,18 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{{ loan.amount.toLocaleString() }} ج.م</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ loan.reason || 'غير محدد' }}</td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border"
-                  :class="{
-                    'bg-yellow-50 text-yellow-700 border-yellow-200': loan.status === 'pending',
-                    'bg-green-50 text-green-700 border-green-200': loan.status === 'approved',
-                    'bg-red-50 text-red-700 border-red-200': loan.status === 'rejected'
-                  }">
-                  {{ translateStatus(loan.status) }}
-                </span>
+                <div class="flex flex-col space-y-1">
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border w-fit"
+                    :class="{
+                      'bg-yellow-50 text-yellow-700 border-yellow-200': loan.status === 'pending',
+                      'bg-green-50 text-green-700 border-green-200': loan.status === 'approved',
+                      'bg-red-50 text-red-700 border-red-200': loan.status === 'rejected',
+                      'bg-gray-50 text-gray-700 border-gray-200': loan.status === 'paid'
+                    }">
+                    {{ translateStatus(loan.status) }}
+                  </span>
+                  <span v-if="loan.approved_by_name" class="text-xs text-gray-500 font-medium">بواسطة: {{ loan.approved_by_name }}</span>
+                </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
                 <div v-if="loan.status === 'pending'" class="space-x-2 space-x-reverse flex justify-end">
@@ -109,12 +142,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { apiFetch } from '../api/client'
+import { useAuthStore } from '../stores/auth'
+
+const activeTab = ref<'leaves' | 'loans'>('leaves')
 
 const leaves = ref<any[]>([])
 const loans = ref<any[]>([])
 const loading = ref(true)
+const authStore = useAuthStore()
+
+const pendingLeavesCount = computed(() => leaves.value.filter(l => l.status === 'pending').length)
+const pendingLoansCount = computed(() => loans.value.filter(l => l.status === 'pending').length)
 
 const loadData = async () => {
   loading.value = true
@@ -136,7 +176,8 @@ const translateStatus = (status: string) => {
   const map: Record<string, string> = {
     'pending': 'قيد الانتظار',
     'approved': 'مقبول',
-    'rejected': 'مرفوض'
+    'rejected': 'مرفوض',
+    'paid': 'مسددة'
   }
   return map[status] || status
 }

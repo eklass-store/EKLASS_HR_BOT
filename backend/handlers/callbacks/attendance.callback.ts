@@ -106,11 +106,29 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
       );
     }
 
+    const settings = await getSettings(env);
+    const endTime = settings['work_end_time'] ?? '17:00';
+
+    const { toMinutes } = await import('../../utils/time');
+    const endMins = toMinutes(endTime);
+    const currMins = toMinutes(time);
+    
+    const isOffDay = isWeekend(date) || await isHoliday(env, date);
+    let overtimeMinutes = 0;
+    if (!isOffDay && currMins > endMins) {
+      overtimeMinutes = currMins - endMins;
+    }
+
     // FIX BUG-08: يستهدف السجل الذي check_out_time IS NULL فقط
-    await recordCheckout(env, emp.id, date, time);
+    await recordCheckout(env, emp.id, date, time, overtimeMinutes);
+
+    let msg = `🌙 تم تسجيل انصرافك الساعة *${time}*\nنتمنى لك وقتاً ممتعاً!`;
+    if (overtimeMinutes > 0) {
+      msg += `\n🌟 شكراً لعملك الإضافي! لقد قمت بإضافة *${overtimeMinutes}* دقيقة (Overtime).`;
+    }
 
     await ctx.editMessageText(
-      `🌙 تم تسجيل انصرافك الساعة *${time}*\nنتمنى لك وقتاً ممتعاً!`,
+      msg,
       { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
     );
     await ctx.answerCallbackQuery();
@@ -135,14 +153,18 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
     let text = `📋 *سجل الحضور — ${month}*\n\n`;
     let totalLate = 0;
+    let totalOvertime = 0;
     for (const rec of records) {
       const ci = rec.check_in_time ?? '—';
       const co = rec.check_out_time ?? '—';
       const lateStr = rec.late_minutes > 0 ? ` ⚠️(${rec.late_minutes}د)` : '';
-      text += `📅 ${rec.date}: ${ci} ← ${co}${lateStr}\n`;
+      const otStr = (rec as any).overtime_minutes > 0 ? ` 🌟(+${(rec as any).overtime_minutes}د)` : '';
+      text += `📅 ${rec.date}: ${ci} ← ${co}${lateStr}${otStr}\n`;
       totalLate += rec.late_minutes;
+      totalOvertime += (rec as any).overtime_minutes || 0;
     }
     text += `\n⏱ إجمالي التأخير: *${totalLate}* دقيقة`;
+    if (totalOvertime > 0) text += `\n🌟 إجمالي الإضافي: *${totalOvertime}* دقيقة`;
 
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',

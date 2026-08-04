@@ -152,9 +152,10 @@ export async function handleAdminRoutes(
   // ── Leaves ───────────────────────────────────────────────────
   if (path === '/api/admin/leaves' && method === 'GET') {
     const res = await env.DB.prepare(`
-      SELECT l.*, e.full_name, e.telegram_id 
+      SELECT l.*, e.full_name, e.telegram_id, a.full_name as approved_by_name
       FROM Leaves l 
       JOIN Employees e ON l.employee_id = e.id 
+      LEFT JOIN Employees a ON l.approved_by = a.id
       ORDER BY l.created_at DESC LIMIT 100
     `).all();
     return jsonResponse(res.results, 200, env);
@@ -169,7 +170,7 @@ export async function handleAdminRoutes(
     const leave = await getLeaveById(env, leaveId);
     if (!leave) return jsonResponse({ error: 'Not found' }, 404, env);
 
-    await updateLeaveStatus(env, leaveId, status);
+    await updateLeaveStatus(env, leaveId, status, adminId);
     await logAction(env, adminId, status === 'approved' ? 'APPROVE_LEAVE' : 'REJECT_LEAVE', `Leave ID ${leaveId} ${status}`);
 
     const emp = await getEmployeeById(env, leave.employee_id);
@@ -191,9 +192,10 @@ export async function handleAdminRoutes(
   // ── Loans ────────────────────────────────────────────────────
   if (path === '/api/admin/loans' && method === 'GET') {
     const res = await env.DB.prepare(`
-      SELECT l.*, e.full_name, e.telegram_id 
+      SELECT l.*, e.full_name, e.telegram_id, a.full_name as approved_by_name
       FROM Loans l 
       JOIN Employees e ON l.employee_id = e.id 
+      LEFT JOIN Employees a ON l.approved_by = a.id
       ORDER BY l.created_at DESC LIMIT 100
     `).all();
     return jsonResponse(res.results, 200, env);
@@ -208,7 +210,7 @@ export async function handleAdminRoutes(
     const loan = await getLoanById(env, loanId);
     if (!loan) return jsonResponse({ error: 'Not found' }, 404, env);
 
-    await updateLoanStatus(env, loanId, status);
+    await updateLoanStatus(env, loanId, status, adminId);
     await logAction(env, adminId, status === 'approved' ? 'APPROVE_LOAN' : 'REJECT_LOAN', `Loan ID ${loanId} ${status}`);
 
     const emp = await getEmployeeById(env, loan.employee_id);

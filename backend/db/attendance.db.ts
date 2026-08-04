@@ -37,11 +37,12 @@ export async function recordCheckout(
   env: Env,
   employeeId: number,
   date: string,
-  checkOutTime: string
+  checkOutTime: string,
+  overtimeMinutes: number = 0
 ): Promise<number> {
   const result = await env.DB.prepare(
-    "UPDATE Attendance SET check_out_time = ? WHERE employee_id = ? AND date = ? AND check_out_time IS NULL"
-  ).bind(checkOutTime, employeeId, date).run();
+    "UPDATE Attendance SET check_out_time = ?, overtime_minutes = ? WHERE employee_id = ? AND date = ? AND check_out_time IS NULL"
+  ).bind(checkOutTime, overtimeMinutes, employeeId, date).run();
   return result.meta.changes;
 }
 

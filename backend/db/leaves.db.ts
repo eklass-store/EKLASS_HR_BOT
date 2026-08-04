@@ -24,11 +24,16 @@ export async function getLeaveById(env: Env, id: number): Promise<Leave | null> 
   ).bind(id).first() as Leave | null;
 }
 
-/** يحدّث حالة الإجازة (approved | rejected) */
-export async function updateLeaveStatus(env: Env, id: number, status: string): Promise<void> {
-  await env.DB.prepare(
-    "UPDATE Leaves SET status = ? WHERE id = ?"
-  ).bind(status, id).run();
+export async function updateLeaveStatus(env: Env, id: number, status: string, approvedBy: number | null = null): Promise<void> {
+  if (approvedBy !== null) {
+    await env.DB.prepare(
+      "UPDATE Leaves SET status = ?, approved_by = ? WHERE id = ?"
+    ).bind(status, approvedBy, id).run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE Leaves SET status = ? WHERE id = ?"
+    ).bind(status, id).run();
+  }
 }
 
 /** آخر 10 إجازات للموظف */
