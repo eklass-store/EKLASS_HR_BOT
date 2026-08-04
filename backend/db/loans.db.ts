@@ -10,9 +10,17 @@ export async function createLoan(
   amount: number,
   reason: string
 ): Promise<number> {
-  const result = await env.DB.prepare(
-    "INSERT INTO Loans (employee_id, amount, reason, status) VALUES (?, ?, ?, 'pending')"
-  ).bind(employeeId, amount, reason).run();
+  const result = await env.DB.prepare(`
+    INSERT INTO Loans (employee_id, amount, remaining_amount, reason, status)
+    SELECT ?, ?, ?, ?, 'pending'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM Loans WHERE employee_id = ? AND status = 'pending'
+    )
+  `).bind(employeeId, amount, amount, reason, employeeId).run();
+  
+  if (result.meta.changes === 0) {
+    throw new Error('Employee already has a pending loan');
+  }
   return result.meta.last_row_id as number;
 }
 
@@ -53,7 +61,7 @@ export async function hasPendingLoan(env: Env, employeeId: number): Promise<bool
 /** مجموع السلف المعتمدة غير المسددة */
 export async function getTotalActiveLoan(env: Env, employeeId: number): Promise<number> {
   const result = await env.DB.prepare(
-    "SELECT COALESCE(SUM(amount), 0) AS total FROM Loans WHERE employee_id = ? AND status = 'approved'"
+    "SELECT COALESCE(SUM(remaining_amount), 0) AS total FROM Loans WHERE employee_id = ? AND status = 'approved'"
   ).bind(employeeId).first() as any;
   return result?.total ?? 0;
 }

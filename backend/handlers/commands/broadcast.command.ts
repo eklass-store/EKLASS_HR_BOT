@@ -1,6 +1,5 @@
 // ============================================================
 // src/handlers/commands/broadcast.command.ts — /broadcast
-// FIX BUG-06: استخدام slice بدل replace لقص الأمر بدقة
 // ============================================================
 import { Bot } from 'grammy';
 import { Env } from '../../types';
@@ -15,7 +14,6 @@ export function registerBroadcastCommand(bot: Bot, env: Env): void {
 
     if (!admin || admin.role !== 'admin') return;
 
-    // FIX BUG-06: slice بدل replace — يضمن قص صحيح بغض النظر عن محتوى الرسالة
     const fullText = ctx.message?.text ?? '';
     const text = fullText.slice('/broadcast '.length).trim();
 
@@ -29,16 +27,17 @@ export function registerBroadcastCommand(bot: Bot, env: Env): void {
 
     const employees = await getAllEmployees(env);
     let sentCount = 0;
-    for (const emp of employees) {
-      if (emp.telegram_id === admin.telegram_id) continue;
-      try {
-        await bot.api.sendMessage(emp.telegram_id, `📢 *تعميم إداري:*\n\n${escapeMarkdown(text)}`, {
+    const chunkSize = 50;
+    for (let i = 0; i < employees.length; i += chunkSize) {
+      const chunk = employees.slice(i, i + chunkSize);
+      const promises = chunk.map(emp => {
+        if (emp.telegram_id === admin.telegram_id) return Promise.resolve(0);
+        return bot.api.sendMessage(emp.telegram_id, `📢 *تعميم إداري:*\n\n${escapeMarkdown(text)}`, {
           parse_mode: 'Markdown',
-        });
-        sentCount++;
-      } catch (_) {
-        // المستخدم ربما حجب البوت — نتجاهل ونكمل
-      }
+        }).then(() => 1).catch(() => 0);
+      });
+      const results = await Promise.all(promises);
+      sentCount += results.reduce((sum, val) => sum + val, 0);
     }
     await ctx.reply(`✅ تم إرسال التعميم إلى *${sentCount}* موظف بنجاح.`, {
       parse_mode: 'Markdown',

@@ -1,9 +1,5 @@
 // ============================================================
 // src/handlers/callbacks/attendance.callback.ts
-// FIX BUG-01: فحص مسبق قبل INSERT + UNIQUE constraint في DB
-// FIX BUG-02: getNow() بتوقيت محلي
-// FIX BUG-03: calcLateMinutes() حسابي لا نصي
-// FIX BUG-08: recordCheckout يستهدف سجلاً بدون check_out فقط
 // ============================================================
 import { Bot } from 'grammy';
 import { Env } from '../../types';
@@ -29,7 +25,6 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
     const { date, time } = getNow(env.TIMEZONE);
 
-    // FIX BUG-01: فحص مسبق قبل الإدراج
     const existing = await getTodayAttendance(env, emp.id, date);
     if (existing) {
       if (!existing.check_in_time) {
@@ -60,7 +55,6 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
        return ctx.answerCallbackQuery();
     }
 
-    // FIX BUG-03: calcLateMinutes — حساب رقمي دقيق
     // لا يتم حساب تأخير في أيام الإجازات والعطل
     const lateMinutes = isOffDay ? 0 : calcLateMinutes(time, startTime);
 
@@ -119,7 +113,6 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
       overtimeMinutes = currMins - endMins;
     }
 
-    // FIX BUG-08: يستهدف السجل الذي check_out_time IS NULL فقط
     await recordCheckout(env, emp.id, date, time, overtimeMinutes);
 
     let msg = `🌙 تم تسجيل انصرافك الساعة *${time}*\nنتمنى لك وقتاً ممتعاً!`;

@@ -18,9 +18,12 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
   if (!env.BOT_TOKEN) {
     return new Response('BOT_TOKEN is missing', { status: 500 });
   }
-
-
-
+  if (env.WEBHOOK_SECRET) {
+    const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    if (secret !== env.WEBHOOK_SECRET) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+  }
   const bot = new Bot(env.BOT_TOKEN);
 
   // ── Error Handling Middleware ──

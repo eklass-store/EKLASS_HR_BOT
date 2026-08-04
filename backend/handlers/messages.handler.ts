@@ -72,7 +72,6 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
 
     const stateRecord = await getState(env, tid);
     if (!stateRecord) {
-      // BUG-A FIX: لا تصمت — أخبر المستخدم بالقائمة
       const employee = await getEmployeeByTelegramId(env, tid);
       if (employee) {
         return ctx.reply(

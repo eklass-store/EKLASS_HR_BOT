@@ -1,7 +1,5 @@
 // ============================================================
 // src/db/attendance.db.ts — Attendance Database Operations
-// FIX BUG-01: فحص مسبق + UNIQUE constraint في DB
-// FIX BUG-08: checkout يستهدف السجل الصحيح
 // ============================================================
 import { Env, AttendanceRecord, DailyAttendanceRow } from '../types';
 
@@ -52,9 +50,11 @@ export async function getAttendanceHistory(
   employeeId: number,
   month: string
 ): Promise<AttendanceRecord[]> {
+  const startDate = `${month}-01`;
+  const endDate = `${month}-31`;
   const result = await env.DB.prepare(
-    "SELECT * FROM Attendance WHERE employee_id = ? AND date LIKE ? ORDER BY date DESC"
-  ).bind(employeeId, `${month}%`).all();
+    "SELECT * FROM Attendance WHERE employee_id = ? AND date >= ? AND date <= ? ORDER BY date DESC"
+  ).bind(employeeId, startDate, endDate).all();
   return result.results as unknown as AttendanceRecord[];
 }
 
@@ -83,8 +83,10 @@ export async function getTotalLateMinutes(
   employeeId: number,
   month: string
 ): Promise<number> {
+  const startDate = `${month}-01`;
+  const endDate = `${month}-31`;
   const result = await env.DB.prepare(
-    "SELECT COALESCE(SUM(late_minutes), 0) AS total FROM Attendance WHERE employee_id = ? AND date LIKE ?"
-  ).bind(employeeId, `${month}%`).first() as any;
+    "SELECT COALESCE(SUM(late_minutes), 0) AS total FROM Attendance WHERE employee_id = ? AND date >= ? AND date <= ?"
+  ).bind(employeeId, startDate, endDate).first() as any;
   return result?.total ?? 0;
 }

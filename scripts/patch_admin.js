@@ -18,14 +18,12 @@ content = content.replace(
 
         const activeLoan = loansMap.get(employee.id) || 0;
 
-        // TASK 7: Deduct loan only up to available salary
         const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction);
         const loanDeducted = Math.min(activeLoan, availableForLoan);
 
         const totalDed = lateDeduction + loanDeducted;
         const netSalary = Math.max(0, dynamicMonthSalary - totalDed);
 
-        // TASK 8: Prepare batch statements
         batchStatements.push(
           env.DB.prepare("INSERT INTO Payroll (employee_id, month, base_salary, total_deductions, net_salary, status) VALUES (?, ?, ?, ?, ?, 'issued')")
             .bind(employee.id, month, dynamicMonthSalary, totalDed, netSalary)
@@ -37,14 +35,12 @@ content = content.replace(
 
         const activeLoan = loansMap.get(employee.id) || 0;
 
-        // TASK 7: Deduct loan only up to available salary
         const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction + overtimeBonus);
         const loanDeducted = Math.min(activeLoan, availableForLoan);
 
         const totalDed = lateDeduction + loanDeducted;
         const netSalary = Math.max(0, dynamicMonthSalary - totalDed + overtimeBonus);
 
-        // TASK 8: Prepare batch statements
         batchStatements.push(
           env.DB.prepare("INSERT INTO Payroll (employee_id, month, base_salary, total_deductions, total_bonuses, net_salary, status) VALUES (?, ?, ?, ?, ?, ?, 'issued')")
             .bind(employee.id, month, dynamicMonthSalary, totalDed, overtimeBonus, netSalary)

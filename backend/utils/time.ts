@@ -1,7 +1,5 @@
 // ============================================================
 // src/utils/time.ts — Timezone-Aware Time Helpers
-// FIX BUG-02: استبدال toISOString() (UTC) بـ Intl API
-// FIX BUG-03: حساب التأخير بالدقائق الحقيقية بدل مقارنة نصية
 // ============================================================
 
 /**
@@ -63,7 +61,6 @@ export function getDaysInMonth(month: string): number {
  * يتحقق من صحة صيغة التاريخ YYYY-MM-DD
  */
 export function isValidDate(dateStr: string): boolean {
-  // BUG-G FIX: لا نستخدم toISOString() (UTC) لأنه يرفض تواريخ صحيحة
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const [year, month, day] = dateStr.split('-').map(Number);
   if (month < 1 || month > 12) return false;

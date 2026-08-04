@@ -8,6 +8,7 @@ import { getTotalLateMinutes } from '../../db/attendance.db';
 import { getMainMenu } from '../../keyboards/main.keyboards';
 import { getCurrentMonth, getDaysInMonth, calcLateMinutes } from '../../utils/time';
 import { InlineKeyboard } from 'grammy';
+import { calculatePayroll } from '../../utils/payroll';
 
 export function registerSalaryCallbacks(bot: Bot, env: Env): void {
   bot.callbackQuery('action_salary', async (ctx) => {
@@ -18,34 +19,43 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
     const month = getCurrentMonth(env.TIMEZONE);
     const settings = await getSettings(env);
 
-    // BUG-F FIX: مزامنة مع منطق إصدار الراتب الفعلي
     const startTime = settings['work_start_time'] ?? '09:00';
     const endTime   = settings['work_end_time'] ?? '17:00';
     const workMinutes = calcLateMinutes(endTime, startTime) || 480;
-    const daysInMonth = getDaysInMonth(month);
-    const dailyRate = emp.base_salary / 30;
-    const dynamicMonthSalary = dailyRate * daysInMonth; // الراتب الفعلي لهذا الشهر
-    const minuteRate = dailyRate / workMinutes;
+    
+    const deductionMultiplier = parseFloat(settings['late_deduction_per_minute'] ?? '1');
+    const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
 
-    const lateMinutes   = await getTotalLateMinutes(env, emp.id, month);
-    const lateDeduction = lateMinutes * minuteRate;
-    const activeLoan    = await getTotalActiveLoan(env, emp.id);
-    const totalDed      = lateDeduction + activeLoan;
-    const netSalary     = Math.max(0, dynamicMonthSalary - totalDed);
+    const lateMinutes = await getTotalLateMinutes(env, emp.id, month);
+    const otRes = await env.DB.prepare("SELECT SUM(overtime_minutes) as ot FROM Attendance WHERE employee_id = ? AND date >= ? AND date <= ?").bind(emp.id, `${month}-01`, `${month}-31`).first();
+    const overtimeMinutes = (otRes as any)?.ot || 0;
+    const activeLoan = await getTotalActiveLoan(env, emp.id);
+
+    const payroll = calculatePayroll({
+      base_salary: emp.base_salary,
+      workMinutes,
+      lateMinutes,
+      overtimeMinutes,
+      activeLoan,
+      deductionMultiplier,
+      bonusMultiplier
+    });
 
     const history = await getEmployeePayroll(env, emp.id);
 
     let text = `💰 *تفاصيل راتب شهر ${month}*\n\n`;
     text += `📌 الراتب الأساسي (30ي):    ${emp.base_salary.toFixed(2)} جنيه\n`;
-    text += `📌 راتب هذا الشهر (${daysInMonth}ي): ${dynamicMonthSalary.toFixed(2)} جنيه\n`;
 
-    if (lateDeduction > 0) {
-      text += `➖ خصم التأخير:      ${lateDeduction.toFixed(2)} جنيه\n`;
+    if (payroll.lateDeduction > 0) {
+      text += `➖ خصم التأخير:      ${payroll.lateDeduction.toFixed(2)} جنيه\n`;
+    }
+    if (payroll.overtimeBonus > 0) {
+      text += `➕ إضافي:            ${payroll.overtimeBonus.toFixed(2)} جنيه\n`;
     }
     if (activeLoan > 0) {
       text += `➖ سلفة نشطة:        ${activeLoan.toFixed(2)} جنيه\n`;
     }
-    text += `\n💵 *الصافي المتوقع: ${netSalary.toFixed(2)} جنيه*\n`;
+    text += `\n💵 *الصافي المتوقع: ${payroll.netSalary.toFixed(2)} جنيه*\n`;
 
     if (history.length > 0) {
       text += `\n📅 *الرواتب السابقة:*\n`;

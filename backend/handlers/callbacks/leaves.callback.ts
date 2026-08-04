@@ -1,6 +1,5 @@
 // ============================================================
 // src/handlers/callbacks/leaves.callback.ts
-// FIX BUG-07: إشعار الموظف عند قبول/رفض الإجازة
 // ============================================================
 import { Bot, InlineKeyboard } from 'grammy';
 import { Env } from '../../types';
@@ -165,7 +164,6 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
     await updateLeaveStatus(env, leaveId, newStatus, admin.id);
     await logAction(env, admin.id, isApprove ? 'APPROVE_LEAVE' : 'REJECT_LEAVE', `تم ${isApprove ? 'قبول' : 'رفض'} إجازة ID ${leaveId} للموظف ID ${leave.employee_id}`);
 
-    // FIX BUG-07: إشعار الموظف
     const employee = await getEmployeeById(env, leave.employee_id);
     if (employee) {
       const notif = isApprove

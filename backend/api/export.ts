@@ -3,6 +3,7 @@
 // ============================================================
 import * as ExcelJS from 'exceljs';
 import { Env } from '../types';
+import { calculatePayroll } from '../utils/payroll';
 
 export async function exportEmployeesExcel(env: Env): Promise<Response> {
   const result = await env.DB.prepare(
@@ -156,12 +157,16 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     const loansAmount = loansMap.get(emp.id) || 0;
     
     const base_salary = emp.base_salary || 0;
-    const dailyRate = base_salary / 30;
-    const minuteRate = dailyRate / workMinutes;
-    const late_deduction = att.late_minutes * minuteRate * deductionRate;
-    const overtime_bonus = att.overtime_minutes * minuteRate * bonusRate;
     
-    const net_salary = base_salary - late_deduction + overtime_bonus - loansAmount;
+    const payroll = calculatePayroll({
+      base_salary: base_salary,
+      workMinutes,
+      lateMinutes: att.late_minutes,
+      overtimeMinutes: att.overtime_minutes,
+      activeLoan: loansAmount,
+      deductionMultiplier: deductionRate,
+      bonusMultiplier: bonusRate
+    });
 
     sheet.addRow({
       id: emp.id,
@@ -170,11 +175,11 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       base_salary: base_salary,
       present_days: att.present_days,
       late_minutes: att.late_minutes,
-      late_deduction: late_deduction,
+      late_deduction: payroll.lateDeduction,
       overtime_minutes: att.overtime_minutes,
-      overtime_bonus: overtime_bonus,
+      overtime_bonus: payroll.overtimeBonus,
       total_loans: loansAmount,
-      net_salary: net_salary
+      net_salary: payroll.netSalary
     });
   }
 

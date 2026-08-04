@@ -1,7 +1,5 @@
 // ============================================================
 // src/keyboards/main.keyboards.ts — Main & Admin Menus
-// FIX BUG-E: getMainMenu يُظهر زر لوحة الإدارة للأدمن
-// FIX BUG-N: إضافة getAdminMenu التي كانت مفقودة
 // ============================================================
 import { InlineKeyboard, Keyboard } from 'grammy';
 

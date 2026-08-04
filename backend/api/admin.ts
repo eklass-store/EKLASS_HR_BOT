@@ -11,6 +11,7 @@ import { getTotalLateMinutes } from '../db/attendance.db';
 import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../db/loans.db';
 import { getDaysInMonth, calcLateMinutes, isValidDate } from '../utils/time';
 import { escapeMarkdown } from '../utils/markdown';
+import { calculatePayroll } from '../utils/payroll';
 
 // ── Interfaces ───────────────────────────────────────────────
 interface AddEmployeeReq { telegram_id: string; full_name: string; base_salary?: number; department_id?: number; role?: string; }
@@ -121,14 +122,35 @@ export async function handleAdminRoutes(
     }
     if (method === 'PUT') {
       const data = await request.json() as UpdateEmployeeReq;
-      if (data.base_salary !== undefined) await updateEmployeeSalary(env, empId, data.base_salary);
-      if (data.role !== undefined) await updateEmployeeRole(env, empId, data.role);
-      if (data.is_active !== undefined && !data.full_name) {
-        await env.DB.prepare('UPDATE Employees SET is_active = ? WHERE id = ?')
-          .bind(data.is_active ? 1 : 0, empId).run();
-      } else if (data.full_name && data.telegram_id) {
-        await env.DB.prepare('UPDATE Employees SET full_name = ?, department_id = ?, is_active = ? WHERE id = ?')
-          .bind(data.full_name, data.department_id || null, data.is_active !== undefined ? (data.is_active ? 1 : 0) : 1, empId).run();
+      if (data.base_salary !== undefined) {
+        const salary = Number(data.base_salary);
+        if (isNaN(salary) || salary < 0) return jsonResponse({ error: 'Invalid base_salary' }, 400, env);
+        await updateEmployeeSalary(env, empId, salary);
+      }
+      if (data.role !== undefined) {
+        if (!['admin', 'manager', 'employee'].includes(data.role)) return jsonResponse({ error: 'Invalid role' }, 400, env);
+        await updateEmployeeRole(env, empId, data.role);
+      }
+      
+      const updates = [];
+      const params = [];
+      if (data.is_active !== undefined) {
+        updates.push('is_active = ?');
+        params.push(data.is_active ? 1 : 0);
+      }
+      if (data.full_name) {
+        if (typeof data.full_name !== 'string' || data.full_name.length < 2 || data.full_name.length > 100) return jsonResponse({ error: 'Invalid full_name' }, 400, env);
+        updates.push('full_name = ?');
+        params.push(data.full_name);
+      }
+      if (data.department_id !== undefined) {
+        updates.push('department_id = ?');
+        params.push(data.department_id || null);
+      }
+      
+      if (updates.length > 0) {
+        params.push(empId);
+        await env.DB.prepare(`UPDATE Employees SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run();
       }
       await logAction(env, adminId, 'UPDATE_EMPLOYEE', `Updated employee ID ${empId}`);
       return jsonResponse({ success: true }, 200, env);
@@ -182,7 +204,8 @@ export async function handleAdminRoutes(
   // ── Leaves ───────────────────────────────────────────────────
   if (path === '/api/admin/leaves' && method === 'GET') {
     const url = new URL(request.url);
-    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const limitParam = url.searchParams.get('limit') || '20';
+    const limit = Math.min(Number(limitParam), 500);
     const offset = parseInt(url.searchParams.get('offset') || '0');
     const status = url.searchParams.get('status');
 
@@ -237,7 +260,8 @@ export async function handleAdminRoutes(
   // ── Loans ────────────────────────────────────────────────────
   if (path === '/api/admin/loans' && method === 'GET') {
     const url = new URL(request.url);
-    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const limitParam = url.searchParams.get('limit') || '20';
+    const limit = Math.min(Number(limitParam), 500);
     const offset = parseInt(url.searchParams.get('offset') || '0');
     const status = url.searchParams.get('status');
 
@@ -300,7 +324,6 @@ export async function handleAdminRoutes(
     const employees = await getAllEmployees(env);
     let sentCount = 0;
     
-    // TASK 9: Process in parallel chunks to avoid timeout
     const chunkSize = 50;
     for (let i = 0; i < employees.length; i += chunkSize) {
       const chunk = employees.slice(i, i + chunkSize);
@@ -398,28 +421,35 @@ export async function handleAdminRoutes(
     const { month } = await request.json() as PayrollReq;
     if (!month) return jsonResponse({ error: 'Month is required' }, 400, env);
 
-    const settings = await getSettings(env);
+    try {
+      const settings = await getSettings(env);
     const startTime = settings['work_start_time'] ?? '09:00';
     const endTime = settings['work_end_time'] ?? '17:00';
     const workMinutes = calcLateMinutes(endTime, startTime) || 480;
 
     const employees = await getAllEmployees(env);
     
-    // TASK 10: Fetch all existing payrolls, late minutes, and loans in batch
     const existingPayrolls = await env.DB.prepare("SELECT employee_id FROM Payroll WHERE month = ?").bind(month).all();
     const existingEmpIds = new Set((existingPayrolls.results as any[]).map(r => r.employee_id));
 
-    const lateRes = await env.DB.prepare("SELECT employee_id, SUM(late_minutes) as total_late FROM Attendance WHERE date LIKE ? GROUP BY employee_id").bind(`${month}-%`).all();
+    const startDate = `${month}-01`;
+    const endDate = `${month}-31`;
+
+    const lateRes = await env.DB.prepare("SELECT employee_id, SUM(late_minutes) as total_late FROM Attendance WHERE date >= ? AND date <= ? GROUP BY employee_id").bind(startDate, endDate).all();
     const lateMap = new Map((lateRes.results as any[]).map(r => [r.employee_id, r.total_late || 0]));
 
-      const otRes = await env.DB.prepare("SELECT employee_id, SUM(overtime_minutes) as total_ot FROM Attendance WHERE date LIKE ? GROUP BY employee_id").bind(`${month}-%`).all();
+      const otRes = await env.DB.prepare("SELECT employee_id, SUM(overtime_minutes) as total_ot FROM Attendance WHERE date >= ? AND date <= ? GROUP BY employee_id").bind(startDate, endDate).all();
       const otMap = new Map((otRes.results as any[]).map(r => [r.employee_id, r.total_ot || 0]));
       
       const deductionMultiplier = parseFloat(settings['late_deduction_per_minute'] ?? '1');
       const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
 
-    const loansRes = await env.DB.prepare("SELECT employee_id, SUM(amount) as total_loan FROM Loans WHERE status = 'approved' GROUP BY employee_id").bind().all();
-    const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_loan || 0]));
+    const loansRes = await env.DB.prepare("SELECT id, employee_id, remaining_amount FROM Loans WHERE status = 'approved' ORDER BY created_at ASC").bind().all();
+    const loansMap = new Map<number, any[]>();
+    for (const r of loansRes.results as any[]) {
+      if (!loansMap.has(r.employee_id)) loansMap.set(r.employee_id, []);
+      loansMap.get(r.employee_id)!.push(r);
+    }
 
     let issuedCount = 0;
     let skippedCount = 0;
@@ -432,40 +462,43 @@ export async function handleAdminRoutes(
         continue;
       }
 
-      const dynamicMonthSalary = employee.base_salary; // TASK 6: Fixed salary calculation
-      const dailyRate = employee.base_salary / 30;
-      const minuteRate = dailyRate / workMinutes;
-
       const lateMinutes = lateMap.get(employee.id) || 0;
-      const lateDeduction = lateMinutes * minuteRate;
-      
-      const activeLoan = loansMap.get(employee.id) || 0;
-      
-      // TASK 7: Deduct loan only up to available salary
-      const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction);
-      const loanDeducted = Math.min(activeLoan, availableForLoan);
-      
-      const totalDed = lateDeduction + loanDeducted;
-      const netSalary = Math.max(0, dynamicMonthSalary - totalDed);
+      const overtimeMinutes = otMap.get(employee.id) || 0;
+      const activeLoans = loansMap.get(employee.id) || [];
+      const activeLoanAmount = activeLoans.reduce((sum, l) => sum + (l.remaining_amount || 0), 0);
 
-      // TASK 8: Prepare batch statements
+      const payroll = calculatePayroll({
+        base_salary: employee.base_salary,
+        workMinutes,
+        lateMinutes,
+        overtimeMinutes,
+        activeLoan: activeLoanAmount,
+        deductionMultiplier,
+        bonusMultiplier
+      });
+
       batchStatements.push(
-        env.DB.prepare("INSERT INTO Payroll (employee_id, month, base_salary, total_deductions, net_salary, status) VALUES (?, ?, ?, ?, ?, 'issued')")
-          .bind(employee.id, month, dynamicMonthSalary, totalDed, netSalary)
+        env.DB.prepare("INSERT INTO Payroll (employee_id, month, base_salary, total_deductions, total_bonuses, net_salary, status) VALUES (?, ?, ?, ?, ?, ?, 'issued')")
+          .bind(employee.id, month, payroll.dynamicMonthSalary, payroll.totalDed, payroll.overtimeBonus, payroll.netSalary)
       );
 
-      if (activeLoan > 0 && loanDeducted === activeLoan) {
+      let deductionLeft = payroll.loanDeducted;
+      for (const loan of activeLoans) {
+        if (deductionLeft <= 0) break;
+        const deductAmount = Math.min(deductionLeft, loan.remaining_amount);
+        deductionLeft -= deductAmount;
+        const newRemaining = loan.remaining_amount - deductAmount;
+        const newStatus = newRemaining <= 0.01 ? 'paid' : 'approved'; // 0.01 for floating point safety
         batchStatements.push(
-          env.DB.prepare("UPDATE Loans SET status = 'paid' WHERE employee_id = ? AND status = 'approved'")
-            .bind(employee.id)
+          env.DB.prepare("UPDATE Loans SET remaining_amount = ?, status = ? WHERE id = ?")
+            .bind(newRemaining, newStatus, loan.id)
         );
       }
       
-      // TASK 11: Send Telegram message with Confirmation button
       if (employee.telegram_id) {
-        let msgText = `💰 *تم إصدار راتبك لشهر ${month}*\n\nالراتب الأساسي: ${dynamicMonthSalary.toFixed(2)} ج.م\n`;
-          if (overtimeBonus > 0) msgText += `الإضافي: ${overtimeBonus.toFixed(2)} ج.م\n`;
-          msgText += `إجمالي الخصومات/السلف: ${totalDed.toFixed(2)} ج.م\n*الصافي المستحق:* ${netSalary.toFixed(2)} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
+        let msgText = `💰 *تم إصدار راتبك لشهر ${month}*\n\nالراتب الأساسي: ${payroll.dynamicMonthSalary.toFixed(2)} ج.م\n`;
+        if (payroll.overtimeBonus > 0) msgText += `الإضافي: ${payroll.overtimeBonus.toFixed(2)} ج.م\n`;
+        msgText += `إجمالي الخصومات/السلف: ${payroll.totalDed.toFixed(2)} ج.م\n*الصافي المستحق:* ${payroll.netSalary.toFixed(2)} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
         const keyboard = {
           inline_keyboard: [[
             { text: "✅ تأكيد الاستلام", callback_data: `confirm_payroll_${month}` }
@@ -515,6 +548,10 @@ export async function handleAdminRoutes(
       await Promise.allSettled(notificationPromises);
     }
     return jsonResponse({ success: true, issuedCount, skippedCount }, 200, env);
+    } catch (err: any) {
+      console.error(err);
+      return jsonResponse({ error: err.message }, 500, env);
+    }
   }
 
   return null;

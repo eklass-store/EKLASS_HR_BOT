@@ -39,7 +39,6 @@ INSERT OR IGNORE INTO Settings (key, value) VALUES
     ('overtime_bonus_per_minute', '0');     -- NEW: مكافأة الأوفر تايم لكل دقيقة
 
 -- ── جدول الحضور والانصراف ───────────────────────────────────
--- FIX BUG-01: إضافة UNIQUE(employee_id, date) لمنع تكرار الحضور في نفس اليوم
 CREATE TABLE IF NOT EXISTS Attendance (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id    INTEGER NOT NULL,
@@ -72,6 +71,7 @@ CREATE TABLE IF NOT EXISTS Loans (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
     amount      REAL    NOT NULL,
+    remaining_amount REAL NOT NULL,
     reason      TEXT    NOT NULL,
     status      TEXT    DEFAULT 'pending',  -- pending | approved | rejected | paid
     approved_by INTEGER DEFAULT NULL,
@@ -81,7 +81,6 @@ CREATE TABLE IF NOT EXISTS Loans (
 );
 
 -- ── جدول الرواتب المصدرة ────────────────────────────────────
--- FIX: إضافة UNIQUE(employee_id, month) لمنع إصدار راتب مكرر لنفس الشهر
 CREATE TABLE IF NOT EXISTS Payroll (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id      INTEGER NOT NULL,
@@ -154,3 +153,10 @@ CREATE INDEX IF NOT EXISTS idx_loans_employee_status ON Loans(employee_id, statu
 CREATE INDEX IF NOT EXISTS idx_payroll_employee_month ON Payroll(employee_id, month);
 CREATE INDEX IF NOT EXISTS idx_leaves_created_at ON Leaves(created_at);
 CREATE INDEX IF NOT EXISTS idx_loans_created_at ON Loans(created_at);
+
+-- الفهارس المضافة لتحسين الأداء وتقليل القراءات (Reads Optimization)
+CREATE INDEX IF NOT EXISTS idx_attendance_date_time ON Attendance(date DESC, check_in_time DESC);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON Attendance(date);
+CREATE INDEX IF NOT EXISTS idx_employees_active ON Employees(is_active);
+CREATE INDEX IF NOT EXISTS idx_leaves_status ON Leaves(status);
+CREATE INDEX IF NOT EXISTS idx_loans_status ON Loans(status);

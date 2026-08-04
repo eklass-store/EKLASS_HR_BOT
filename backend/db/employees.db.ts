@@ -73,7 +73,6 @@ export async function softDeleteEmployee(env: Env, id: number): Promise<void> {
     "UPDATE Employees SET is_active = 0 WHERE id = ?"
   ).bind(id).run();
 
-  // BUG-B FIX: حذف حالة المحادثة النشطة حتى لا يكمل طلباته بعد التعطيل
   if (emp?.telegram_id) {
     await env.DB.prepare(
       "DELETE FROM ConversationState WHERE telegram_id = ?"

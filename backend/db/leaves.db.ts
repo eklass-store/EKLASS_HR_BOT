@@ -5,7 +5,6 @@ import { Env, Leave } from '../types';
 
 /** ينشئ طلب إجازة ويرجع الـ ID مباشرة (FIX BUG-04) */
 export async function createLeave(env: Env, employeeId: number, startDate: string, endDate: string, type: string, reason: string): Promise<number | null> {
-  // TASK 13: Atomic insert to prevent race conditions
   const result = await env.DB.prepare(`
     INSERT INTO Leaves (employee_id, start_date, end_date, type, status, reason)
     SELECT ?, ?, ?, ?, 'pending', ?

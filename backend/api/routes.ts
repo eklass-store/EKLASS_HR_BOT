@@ -13,6 +13,10 @@ const getCorsHeaders = (env: Env) => ({
   'Vary': 'Origin',
 });
 
+let statsCache: any = null;
+let statsCacheTime = 0;
+const CACHE_TTL = 60 * 1000; // 60 seconds
+
 export async function handleApiRoutes(
   request: Request,
   env: Env
@@ -64,7 +68,6 @@ export async function handleApiRoutes(
         return new Response(JSON.stringify({ error: 'Invalid authentication data' }), { status: 401, headers: getCorsHeaders(env) });
       }
 
-      // BUG-FIX: Prevent Replay Attacks by checking if the hash was already used
       const nonceExists = await env.DB.prepare("SELECT hash FROM AuthNonces WHERE hash = ?").bind(hash).first();
       if (nonceExists) {
         return new Response(JSON.stringify({ error: 'Authentication payload already used' }), { status: 401, headers: getCorsHeaders(env) });
@@ -72,7 +75,6 @@ export async function handleApiRoutes(
       // Register hash as used
       await env.DB.prepare("INSERT INTO AuthNonces (hash) VALUES (?)").bind(hash).run();
 
-      // BUG-D FIX: إضافة AND is_active = 1 لمنع الأدمن المحذوف من تسجيل الدخول
       const telegramId = String(userData.id);
       const adminCheck = await env.DB.prepare("SELECT * FROM Employees WHERE telegram_id = ? AND role = 'admin' AND is_active = 1").bind(telegramId).first();
       
@@ -153,6 +155,11 @@ export async function handleApiRoutes(
 
   // ── GET /api/stats ─────────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/stats') {
+    const now = Date.now();
+    if (statsCache && (now - statsCacheTime) < CACHE_TTL) {
+      return new Response(JSON.stringify(statsCache), { headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } });
+    }
+
     const [empCount, attCount, pendingLeaves, pendingLoans] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS c FROM Employees WHERE is_active = 1").first() as Promise<any>,
       env.DB.prepare("SELECT COUNT(*) AS c FROM Attendance").first() as Promise<any>,
@@ -160,13 +167,16 @@ export async function handleApiRoutes(
       env.DB.prepare("SELECT COUNT(*) AS c FROM Loans WHERE status = 'pending'").first() as Promise<any>,
     ]);
 
+    statsCache = {
+      employees:        empCount?.c        ?? 0,
+      attendance_records: attCount?.c      ?? 0,
+      pending_leaves:   pendingLeaves?.c   ?? 0,
+      pending_loans:    pendingLoans?.c    ?? 0,
+    };
+    statsCacheTime = now;
+
     return new Response(
-      JSON.stringify({
-        employees:        empCount?.c        ?? 0,
-        attendance_records: attCount?.c      ?? 0,
-        pending_leaves:   pendingLeaves?.c   ?? 0,
-        pending_loans:    pendingLoans?.c    ?? 0,
-      }),
+      JSON.stringify(statsCache),
       { headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } }
     );
   }
@@ -233,8 +243,9 @@ export async function handleApiRoutes(
   
   // ── GET /api/attendance ─────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/attendance') {
-    const limit = url.searchParams.get('limit') || '50';
-    const offset = url.searchParams.get('offset') || '0';
+    const limitParam = url.searchParams.get('limit') || '50';
+    const limit = Math.min(Number(limitParam), 500);
+    const offset = Number(url.searchParams.get('offset') || '0');
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
     
@@ -247,7 +258,7 @@ export async function handleApiRoutes(
         WHERE a.date >= ? AND a.date <= ?
         ORDER BY a.date ASC, a.check_in_time ASC
         LIMIT ? OFFSET ?
-      `).bind(startDate, endDate, Number(limit), Number(offset)).all();
+      `).bind(startDate, endDate, limit, offset).all();
     } else {
       result = await env.DB.prepare(`
         SELECT a.*, e.full_name, e.department_id
@@ -255,7 +266,7 @@ export async function handleApiRoutes(
         JOIN Employees e ON a.employee_id = e.id 
         ORDER BY a.date DESC, a.check_in_time DESC 
         LIMIT ? OFFSET ?
-      `).bind(Number(limit), Number(offset)).all();
+      `).bind(limit, offset).all();
     }
     
     // Add dynamic status (present, late)
