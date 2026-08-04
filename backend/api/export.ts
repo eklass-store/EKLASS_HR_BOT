@@ -119,7 +119,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     { header: 'قيمة خصم التأخير', key: 'late_deduction', width: 15 },
     { header: 'دقائق الأوفر تايم', key: 'overtime_minutes', width: 15 },
     { header: 'مكافأة الأوفر تايم', key: 'overtime_bonus', width: 15 },
-    { header: 'السلف المعتمدة', key: 'total_loans', width: 15 },
+    { header: 'السلف المعتمدة (النشطة)', key: 'total_loans', width: 20 },
+    { header: 'قيمة السلفة المخصومة', key: 'loan_deduction', width: 20 },
     { header: 'الراتب النهائي (الصافي)', key: 'net_salary', width: 20 }
   ];
 
@@ -142,15 +143,15 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     overtime_minutes: r.overtime_minutes || 0
   }]));
 
-  // Fetch loans
-  const loansRes = await env.DB.prepare(`
-    SELECT employee_id, SUM(amount) as total_loans
+  // Fetch ALL active loans (remaining_amount) regardless of creation date
+  const activeLoansRes = await env.DB.prepare(`
+    SELECT employee_id, SUM(remaining_amount) as total_loans
     FROM Loans
-    WHERE date(created_at) >= ? AND date(created_at) <= ? AND status = 'approved'
+    WHERE status = 'approved'
     GROUP BY employee_id
     LIMIT 5000
-  `).bind(startDate, endDate).all();
-  const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_loans]));
+  `).all();
+  const loansMap = new Map((activeLoansRes.results as any[]).map(r => [r.employee_id, r.total_loans]));
 
   for (const emp of empRes.results as any[]) {
     const att = attMap.get(emp.id) || { present_days: 0, late_minutes: 0, overtime_minutes: 0 };
@@ -179,6 +180,7 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       overtime_minutes: att.overtime_minutes,
       overtime_bonus: payroll.overtimeBonus,
       total_loans: loansAmount,
+      loan_deduction: payroll.loanDeducted,
       net_salary: payroll.netSalary
     });
   }
