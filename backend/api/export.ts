@@ -49,7 +49,7 @@ export async function exportEmployeesExcel(env: Env): Promise<Response> {
 
 export async function exportMonthlyReport(env: Env, month: string): Promise<Response> {
   const result = await env.DB.prepare(`
-    SELECT e.id, e.full_name, e.base_salary, p.total_deductions, p.net_salary, p.status as payroll_status, p.is_confirmed, p.confirmed_at
+    SELECT e.id, e.full_name, e.base_salary, p.total_deductions, p.total_bonuses, p.net_salary, p.status as payroll_status, p.is_confirmed, p.confirmed_at
     FROM Employees e
     LEFT JOIN Payroll p ON e.id = p.employee_id AND p.month = ?
     WHERE e.is_active = 1
@@ -64,6 +64,7 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
     { header: 'ID', key: 'id', width: 10 },
     { header: 'الاسم الكامل', key: 'full_name', width: 30 },
     { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
+    { header: 'الإضافي', key: 'total_bonuses', width: 15 },
     { header: 'إجمالي الخصومات', key: 'total_deductions', width: 20 },
     { header: 'صافي الراتب', key: 'net_salary', width: 15 },
     { header: 'حالة الدفع', key: 'payroll_status', width: 15 },
@@ -75,6 +76,7 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
       id: row.id,
       full_name: row.full_name,
       base_salary: row.base_salary,
+      total_bonuses: row.total_bonuses ?? 0,
       total_deductions: row.total_deductions ?? 0,
       net_salary: row.net_salary ?? row.base_salary,
       payroll_status: row.payroll_status === 'issued' ? 'تم الدفع' : (row.payroll_status ? 'معلق' : 'لم يصدر'),
@@ -100,7 +102,11 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   const { getSettings } = await import('../db/settings.db');
   const settings = await getSettings(env);
   const deductionRate = parseFloat(settings['late_deduction_per_minute'] ?? '1');
-  const bonusRate = parseFloat(settings['overtime_bonus_per_minute'] ?? '2');
+  const bonusRate = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
+  const startTime = settings['work_start_time'] ?? '09:00';
+  const endTime = settings['work_end_time'] ?? '17:00';
+  const { calcLateMinutes } = await import('../utils/time');
+  const workMinutes = calcLateMinutes(endTime, startTime) || 480;
 
   sheet.columns = [
     { header: 'ID', key: 'id', width: 10 },
@@ -149,9 +155,11 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     const att = attMap.get(emp.id) || { present_days: 0, late_minutes: 0, overtime_minutes: 0 };
     const loansAmount = loansMap.get(emp.id) || 0;
     
-    const late_deduction = att.late_minutes * deductionRate;
-    const overtime_bonus = att.overtime_minutes * bonusRate;
     const base_salary = emp.base_salary || 0;
+    const dailyRate = base_salary / 30;
+    const minuteRate = dailyRate / workMinutes;
+    const late_deduction = att.late_minutes * minuteRate * deductionRate;
+    const overtime_bonus = att.overtime_minutes * minuteRate * bonusRate;
     
     const net_salary = base_salary - late_deduction + overtime_bonus - loansAmount;
 

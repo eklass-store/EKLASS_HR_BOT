@@ -412,6 +412,12 @@ export async function handleAdminRoutes(
     const lateRes = await env.DB.prepare("SELECT employee_id, SUM(late_minutes) as total_late FROM Attendance WHERE date LIKE ? GROUP BY employee_id").bind(`${month}-%`).all();
     const lateMap = new Map((lateRes.results as any[]).map(r => [r.employee_id, r.total_late || 0]));
 
+      const otRes = await env.DB.prepare("SELECT employee_id, SUM(overtime_minutes) as total_ot FROM Attendance WHERE date LIKE ? GROUP BY employee_id").bind(`${month}-%`).all();
+      const otMap = new Map((otRes.results as any[]).map(r => [r.employee_id, r.total_ot || 0]));
+      
+      const deductionMultiplier = parseFloat(settings['late_deduction_per_minute'] ?? '1');
+      const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
+
     const loansRes = await env.DB.prepare("SELECT employee_id, SUM(amount) as total_loan FROM Loans WHERE status = 'approved' GROUP BY employee_id").bind().all();
     const loansMap = new Map((loansRes.results as any[]).map(r => [r.employee_id, r.total_loan || 0]));
 
@@ -457,7 +463,9 @@ export async function handleAdminRoutes(
       
       // TASK 11: Send Telegram message with Confirmation button
       if (employee.telegram_id) {
-        const msgText = `💰 *تم إصدار راتبك لشهر ${month}*\n\nالراتب الأساسي: ${dynamicMonthSalary} ج.م\nإجمالي الخصومات/السلف: ${totalDed} ج.م\n*الصافي المستحق:* ${netSalary} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
+        let msgText = `💰 *تم إصدار راتبك لشهر ${month}*\n\nالراتب الأساسي: ${dynamicMonthSalary.toFixed(2)} ج.م\n`;
+          if (overtimeBonus > 0) msgText += `الإضافي: ${overtimeBonus.toFixed(2)} ج.م\n`;
+          msgText += `إجمالي الخصومات/السلف: ${totalDed.toFixed(2)} ج.م\n*الصافي المستحق:* ${netSalary.toFixed(2)} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
         const keyboard = {
           inline_keyboard: [[
             { text: "✅ تأكيد الاستلام", callback_data: `confirm_payroll_${month}` }

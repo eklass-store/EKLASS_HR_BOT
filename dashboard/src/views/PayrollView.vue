@@ -29,6 +29,7 @@
             <tr>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الموظف</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الأساسي</th>
+              <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الإضافي</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الخصومات</th>
               <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase">الصافي</th>
               <th scope="col" class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">حالة الاستلام</th>
@@ -44,6 +45,7 @@
             <tr v-for="payroll in payrolls" :key="payroll.id" class="hover:bg-gray-50 transition-colors">
               <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{{ payroll.full_name }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ payroll.base_salary.toFixed(2) }} ج.م</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{{ (payroll.total_bonuses || 0).toFixed(2) }} ج.م</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">{{ payroll.total_deductions.toFixed(2) }} ج.م</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">{{ payroll.net_salary.toFixed(2) }} ج.م</td>
               <td class="px-6 py-4 whitespace-nowrap text-center">
