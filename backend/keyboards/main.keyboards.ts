@@ -26,10 +26,7 @@ export function getMainMenu(isAdmin: boolean): InlineKeyboard {
     .text('🏷️ إجازاتي',       'action_leaves')
     .text('💳 سلفي',          'action_loans').row();
 
-  // FIX BUG-E: إضافة زر لوحة الإدارة للأدمن فقط
-  if (isAdmin) {
-    kb.text('⚙️ لوحة الإدارة', 'admin_panel');
-  }
+
 
   return kb;
 }
