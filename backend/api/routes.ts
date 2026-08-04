@@ -133,6 +133,17 @@ export async function handleApiRoutes(
     });
   }
 
+  if (request.method === 'GET' && url.pathname === '/api/webhook-info') {
+    try {
+      const tgUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`;
+      const res = await fetch(tgUrl);
+      const data = await res.json();
+      return jsonResponse(data);
+    } catch (err: any) {
+      return jsonResponse({ error: err.message }, 500);
+    }
+  }
+
   // ── POST /api/set-webhook (Requires Auth) ─────────────────────
   if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
     const webhookUrl = `https://${url.host}/api/webhook`;
