@@ -157,9 +157,19 @@ const absentEmployees = computed(() => records.value.filter(r => r.status === 'a
 // Format time from timestamp/string to HH:MM AM/PM
 const formatTime = (timeStr: string) => {
   if (!timeStr) return '--:--'
+  // If it's already HH:MM or HH:MM:SS, just return it (or the first 5 chars)
+  if (/^\d{2}:\d{2}/.test(timeStr)) {
+    // Optionally format HH:MM to 12-hour AM/PM if desired, but returning as is is safest
+    let [h, m] = timeStr.split(':')
+    let hour = parseInt(h, 10)
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    hour = hour % 12 || 12
+    return `${hour.toString().padStart(2, '0')}:${m} ${ampm}`
+  }
   try {
     const d = new Date(timeStr)
-    return d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+    if (isNaN(d.getTime())) return timeStr
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   } catch {
     return timeStr
   }

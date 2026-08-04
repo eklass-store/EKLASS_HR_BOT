@@ -209,7 +209,7 @@ export async function handleApiRoutes(
 
     const records = result.results.map((r: any) => {
       let status = 'absent';
-      if (r.attendance_id) {
+      if (r.attendance_id && r.check_in_time) {
         status = r.late_minutes > 0 ? 'late' : 'present';
       }
       return {
@@ -237,7 +237,7 @@ export async function handleApiRoutes(
     // Add dynamic status (present, late)
     const records = result.results.map((r: any) => ({
       ...r,
-      status: r.late_minutes > 0 ? 'late' : 'present'
+      status: !r.check_in_time ? 'absent' : (r.late_minutes > 0 ? 'late' : 'present')
     }));
 
     return new Response(JSON.stringify(records), {
