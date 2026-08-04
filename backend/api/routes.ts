@@ -182,6 +182,46 @@ export async function handleApiRoutes(
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
     });
   }
+
+  // ── GET /api/attendance/daily ──────────────────────────────
+  if (request.method === 'GET' && url.pathname === '/api/attendance/daily') {
+    const date = url.searchParams.get('date'); // YYYY-MM-DD
+    if (!date) {
+      return new Response('Date parameter is required', { status: 400, headers: getCorsHeaders(env) });
+    }
+
+    const result = await env.DB.prepare(`
+      SELECT 
+        e.id as employee_id, 
+        e.full_name, 
+        d.name as department_name,
+        a.id as attendance_id,
+        a.check_in_time,
+        a.check_out_time,
+        a.late_minutes,
+        a.overtime_minutes
+      FROM Employees e
+      LEFT JOIN Departments d ON e.department_id = d.id
+      LEFT JOIN Attendance a ON e.id = a.employee_id AND a.date = ?
+      WHERE e.is_active = 1
+      ORDER BY e.full_name
+    `).bind(date).all();
+
+    const records = result.results.map((r: any) => {
+      let status = 'absent';
+      if (r.attendance_id) {
+        status = r.late_minutes > 0 ? 'late' : 'present';
+      }
+      return {
+        ...r,
+        status
+      };
+    });
+
+    return new Response(JSON.stringify(records), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) },
+    });
+  }
   
   // ── GET /api/attendance ─────────────────────────────────────
   if (request.method === 'GET' && url.pathname === '/api/attendance') {
