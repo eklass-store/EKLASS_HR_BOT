@@ -485,6 +485,22 @@ export async function handleAdminRoutes(
         const chunk = batchStatements.slice(i, i + 100);
         await env.DB.batch(chunk);
       }
+      
+      // Notify admins
+      const admins = employees.filter(e => e.role === 'admin' && e.telegram_id);
+      for (const admin of admins) {
+        notificationPromises.push(
+          fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: admin.telegram_id,
+              text: `✅ *تم إصدار رواتب شهر ${month} بنجاح!*\n\nتم إصدار ${issuedCount} راتب، وتخطي ${skippedCount} راتب.`,
+              parse_mode: 'Markdown'
+            })
+          })
+        );
+      }
     }
 
     if (notificationPromises.length > 0) {

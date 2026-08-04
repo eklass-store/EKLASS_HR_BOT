@@ -94,11 +94,7 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
       ).bind(emp.id, month).run();
 
       // Edit message to remove button
-      const newText = ctx.callbackQuery.message?.text + '\n\n✅ *تم تأكيد الاستلام بنجاح*';
-      await ctx.editMessageText(newText, {
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [] }
-      });
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
 
       await ctx.answerCallbackQuery('تم تأكيد الاستلام بنجاح! ✅', { show_alert: true });
     } catch (e) {

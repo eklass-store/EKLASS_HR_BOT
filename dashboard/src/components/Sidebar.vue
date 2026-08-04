@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { LayoutDashboard, Users, FileText, Settings, BarChart2, Radio, ChevronRight, Menu, Clock, Building2 } from 'lucide-vue-next'
+import { LayoutDashboard, Users, FileText, Settings, BarChart2, Radio, ChevronRight, Menu, Clock, Building2, Banknote } from 'lucide-vue-next'
 
 const props = defineProps<{
   isOpen: boolean
@@ -112,6 +112,7 @@ const navigation = [
   { name: 'الحضور اليومي', to: '/attendance-daily', routeName: 'attendance-daily', icon: Clock },
   { name: 'الأقسام', to: '/departments', routeName: 'departments', icon: Building2 },
   { name: 'التقارير', to: '/reports', routeName: 'reports', icon: BarChart2 },
+  { name: 'الرواتب', to: '/payroll', routeName: 'payroll', icon: Banknote },
   { name: 'الإذاعة', to: '/broadcast', routeName: 'broadcast', icon: Radio },
   { name: 'الإعدادات', to: '/settings', routeName: 'settings', icon: Settings },
 ]
