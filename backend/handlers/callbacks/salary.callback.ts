@@ -87,6 +87,8 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
     
     if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
 
+    await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'DEBUG_SALARY', ?)").bind(`Clicked for month: ${month}`).run().catch(() => {});
+
     try {
       // Check if already confirmed
       const record = await env.DB.prepare(
@@ -111,8 +113,9 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
 
       // Edit message to remove button
       await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'SALARY_CONFIRM_ERROR', ?)").bind(String(e.stack || e.message).substring(0, 500)).run().catch(() => {});
       try {
         await ctx.answerCallbackQuery('حدث خطأ أثناء التأكيد.', { show_alert: true });
       } catch (inner) {}
