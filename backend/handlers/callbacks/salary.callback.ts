@@ -27,7 +27,9 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
     const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
 
     const lateMinutes = await getTotalLateMinutes(env, emp.id, month);
-    const otRes = await env.DB.prepare("SELECT SUM(overtime_minutes) as ot FROM Attendance WHERE employee_id = ? AND date >= ? AND date <= ?").bind(emp.id, `${month}-01`, `${month}-31`).first();
+    const [yearStr, monthStr] = month.split('-');
+    const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+    const otRes = await env.DB.prepare("SELECT SUM(overtime_minutes) as ot FROM Attendance WHERE employee_id = ? AND date >= ? AND date <= ?").bind(emp.id, `${month}-01`, `${month}-${daysInMonth}`).first();
     const overtimeMinutes = (otRes as any)?.ot || 0;
     const activeLoan = await getTotalActiveLoan(env, emp.id);
 
@@ -37,6 +39,7 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
       lateMinutes,
       overtimeMinutes,
       activeLoan,
+      daysInMonth,
       deductionMultiplier,
       bonusMultiplier
     });

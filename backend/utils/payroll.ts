@@ -8,6 +8,7 @@ export interface PayrollInput {
   lateMinutes: number;
   overtimeMinutes: number;
   activeLoan: number;
+  daysInMonth: number;
   deductionMultiplier?: number;
   bonusMultiplier?: number;
 }
@@ -31,12 +32,13 @@ export function calculatePayroll(input: PayrollInput): PayrollCalculation {
     lateMinutes,
     overtimeMinutes,
     activeLoan,
+    daysInMonth,
     deductionMultiplier = 1,
     bonusMultiplier = 1,
   } = input;
 
   const dynamicMonthSalary = base_salary; // Fixed monthly salary
-  const dailyRate = base_salary / 30;
+  const dailyRate = daysInMonth > 0 ? base_salary / daysInMonth : 0;
   const minuteRate = workMinutes > 0 ? dailyRate / workMinutes : 0;
 
   const lateDeduction = lateMinutes * minuteRate * deductionMultiplier;

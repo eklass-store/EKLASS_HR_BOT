@@ -109,6 +109,9 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   const { calcLateMinutes } = await import('../utils/time');
   const workMinutes = calcLateMinutes(endTime, startTime) || 480;
 
+  const startObj = new Date(startDate);
+  const daysInMonth = new Date(startObj.getFullYear(), startObj.getMonth() + 1, 0).getDate();
+
   sheet.columns = [
     { header: 'ID', key: 'id', width: 10 },
     { header: 'الاسم الكامل', key: 'full_name', width: 30 },
@@ -165,6 +168,7 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       lateMinutes: att.late_minutes,
       overtimeMinutes: att.overtime_minutes,
       activeLoan: loansAmount,
+      daysInMonth,
       deductionMultiplier: deductionRate,
       bonusMultiplier: bonusRate
     });

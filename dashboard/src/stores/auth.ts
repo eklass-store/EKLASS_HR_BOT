@@ -5,6 +5,7 @@ interface User {
   first_name: string
   last_name?: string
   username?: string
+  hash?: string
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -29,7 +30,18 @@ export const useAuthStore = defineStore('auth', {
       sessionStorage.setItem('token', token)
       sessionStorage.setItem('user', JSON.stringify(user))
     },
-    logout() {
+    async logout() {
+      if (this.user?.hash) {
+        try {
+          await fetch((import.meta.env.VITE_API_URL || '/api') + '/auth/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hash: this.user.hash })
+          });
+        } catch (e) {
+          console.error('Logout failed:', e);
+        }
+      }
       this.token = null
       this.user = null
       sessionStorage.removeItem('token')

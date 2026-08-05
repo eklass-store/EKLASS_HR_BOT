@@ -102,6 +102,18 @@ export async function handleApiRoutes(
     }
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
+    try {
+      const { hash } = await request.json() as { hash?: string };
+      if (hash) {
+        await env.DB.prepare("DELETE FROM AuthNonces WHERE hash = ?").bind(hash).run();
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } });
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: getCorsHeaders(env) });
+    }
+  }
+
   if (request.method === 'GET' && url.pathname === '/api/webhook-info') {
     try {
       const tgUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`;

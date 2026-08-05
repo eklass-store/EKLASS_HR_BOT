@@ -318,7 +318,8 @@ export async function handleAdminRoutes(
     const { message } = await request.json() as MessageReq;
     if (!message) return jsonResponse({ error: 'Message required' }, 400, env);
 
-    await createAnnouncement(env, message, adminId || 0);
+    // [USER-REQUEST] Stop saving public messages to save database space
+    // await createAnnouncement(env, message, adminId || 0);
     await logAction(env, adminId, 'BROADCAST', 'Sent broadcast');
 
     const employees = await getAllEmployees(env);
@@ -433,7 +434,9 @@ export async function handleAdminRoutes(
     const existingEmpIds = new Set((existingPayrolls.results as any[]).map(r => r.employee_id));
 
     const startDate = `${month}-01`;
-    const endDate = `${month}-31`;
+    const [yearStr, monthStr] = month.split('-');
+    const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+    const endDate = `${month}-${daysInMonth}`;
 
     const lateRes = await env.DB.prepare("SELECT employee_id, SUM(late_minutes) as total_late FROM Attendance WHERE date >= ? AND date <= ? GROUP BY employee_id").bind(startDate, endDate).all();
     const lateMap = new Map((lateRes.results as any[]).map(r => [r.employee_id, r.total_late || 0]));
@@ -473,6 +476,7 @@ export async function handleAdminRoutes(
         lateMinutes,
         overtimeMinutes,
         activeLoan: activeLoanAmount,
+        daysInMonth,
         deductionMultiplier,
         bonusMultiplier
       });
@@ -519,6 +523,12 @@ export async function handleAdminRoutes(
       }
       
       issuedCount++;
+
+      // Process notifications in chunks to avoid OOM
+      if (notificationPromises.length >= 50) {
+        await Promise.allSettled(notificationPromises);
+        notificationPromises.length = 0; // clear array
+      }
     }
 
     if (batchStatements.length > 0) {
@@ -556,3 +566,4 @@ export async function handleAdminRoutes(
 
   return null;
 }
+
