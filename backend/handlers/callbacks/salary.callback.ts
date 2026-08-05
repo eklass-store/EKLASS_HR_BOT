@@ -101,6 +101,9 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
         return ctx.answerCallbackQuery('لقد قمت بتأكيد استلام هذا الراتب مسبقاً! ✅', { show_alert: true });
       }
 
+      // Answer callback immediately to prevent timeout
+      await ctx.answerCallbackQuery('تم تأكيد الاستلام بنجاح! ✅', { show_alert: true });
+
       // Update the record
       await env.DB.prepare(
         "UPDATE Payroll SET is_confirmed = 1, confirmed_at = CURRENT_TIMESTAMP WHERE employee_id = ? AND month = ?"
@@ -108,11 +111,11 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
 
       // Edit message to remove button
       await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-
-      await ctx.answerCallbackQuery('تم تأكيد الاستلام بنجاح! ✅', { show_alert: true });
     } catch (e) {
       console.error(e);
-      await ctx.answerCallbackQuery('حدث خطأ أثناء التأكيد.', { show_alert: true });
+      try {
+        await ctx.answerCallbackQuery('حدث خطأ أثناء التأكيد.', { show_alert: true });
+      } catch (inner) {}
     }
   });
 
