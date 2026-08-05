@@ -117,7 +117,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RefreshCw, Loader2, AlertCircle, Trash2, ShieldCheck } from 'lucide-vue-next'
-import { api } from '../api/client'
+import { apiFetch } from '../api/client'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
 
@@ -142,7 +142,7 @@ const fetchLogs = async () => {
   error.value = ''
   selectedIds.value = []
   try {
-    logs.value = await api.get('/admin/audit-logs')
+    logs.value = await apiFetch('/admin/audit-logs')
   } catch (err: any) {
     error.value = err.message || 'فشل تحميل السجلات'
   } finally {
@@ -173,7 +173,7 @@ const deleteSelected = async () => {
   
   try {
     // Delete accepts { ids: [] }
-    await api.request('/admin/audit-logs', {
+    await apiFetch('/admin/audit-logs', {
       method: 'DELETE',
       body: JSON.stringify({ ids: selectedIds.value })
     })
@@ -195,7 +195,7 @@ const deleteSingle = async (id: number) => {
   if (!confirmed) return
   
   try {
-    await api.request('/admin/audit-logs', {
+    await apiFetch('/admin/audit-logs', {
       method: 'DELETE',
       body: JSON.stringify({ ids: [id] })
     })
