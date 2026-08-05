@@ -397,6 +397,20 @@ export async function handleAdminRoutes(
     return jsonResponse(res.results, 200, env);
   }
 
+  if (path === '/api/admin/audit-logs' && method === 'DELETE') {
+    const body = await request.json() as { ids?: number[] };
+    if (!body.ids || !Array.isArray(body.ids) || body.ids.length === 0) {
+      return jsonResponse({ error: 'IDs array is required' }, 400, env);
+    }
+    
+    // Batch delete
+    const statements = body.ids.map(id => 
+      env.DB.prepare('DELETE FROM AuditLogs WHERE id = ?').bind(id)
+    );
+    await env.DB.batch(statements);
+    return jsonResponse({ success: true, count: statements.length }, 200, env);
+  }
+
   // ── GET Payroll List ──────────────────────────────────────────
   if (path === '/api/admin/payroll' && method === 'GET') {
     const url = new URL(request.url);
