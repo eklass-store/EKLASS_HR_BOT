@@ -2,8 +2,8 @@
   <div class="space-y-6">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
       <div>
-        <h1 class="text-2xl font-black text-gray-900 tracking-tight">سجل أخطاء النظام</h1>
-        <p class="text-sm text-gray-500 mt-1">عرض الأخطاء البرمجية الحرجة وحذفها.</p>
+        <h1 class="text-2xl font-black text-gray-900 tracking-tight">سجل حركات النظام</h1>
+        <p class="text-sm text-gray-500 mt-1">عرض ومتابعة كافة الإجراءات الإدارية والأخطاء التقنية.</p>
       </div>
       <div class="flex items-center gap-3">
         <button
@@ -42,8 +42,8 @@
     <!-- State: Empty -->
     <div v-else-if="logs.length === 0" class="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-gray-400">
       <ShieldCheck class="w-12 h-12 mb-4 text-emerald-400" />
-      <p class="font-bold text-lg text-gray-900">لا توجد أخطاء</p>
-      <p class="text-sm mt-1">النظام يعمل بشكل سليم وخالي من الأخطاء الحرجة حالياً.</p>
+      <p class="font-bold text-lg text-gray-900">سجل النظام فارغ</p>
+      <p class="text-sm mt-1">لم يتم تسجيل أي حركات أو أخطاء حتى الآن.</p>
     </div>
 
     <!-- State: Success -->
@@ -75,38 +75,59 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 bg-white">
-            <tr v-for="log in logs" :key="log.id" class="hover:bg-gray-50/50 transition-colors" :class="{'bg-red-50/20': selectedIds.includes(log.id)}">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  :value="log.id"
-                  v-model="selectedIds"
-                />
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                  {{ log.action }}
-                </span>
-              </td>
-              <td class="px-6 py-4">
-                <div class="text-sm text-gray-900 font-mono text-left dir-ltr whitespace-pre-wrap text-xs bg-gray-50 p-2 rounded-lg border border-gray-100">
-                  {{ log.details }}
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ new Date(log.created_at).toLocaleString('ar-EG') }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button
-                  @click="deleteSingle(log.id)"
-                  class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors"
-                  title="حذف هذا السجل"
-                >
-                  <Trash2 class="w-4 h-4" />
-                </button>
-              </td>
-            </tr>
+            <template v-for="log in logs" :key="log.id">
+              <tr class="hover:bg-gray-50/50 transition-colors" :class="{'bg-red-50/20': selectedIds.includes(log.id)}">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    :value="log.id"
+                    v-model="selectedIds"
+                  />
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center gap-2">
+                    <component :is="getActionMeta(log.action).icon" class="w-5 h-5" :class="`text-${getActionMeta(log.action).color}-500`" />
+                    <span :class="`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getActionMeta(log.action).color}-100 text-${getActionMeta(log.action).color}-800`">
+                      {{ getActionMeta(log.action).label }}
+                    </span>
+                  </div>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-sm text-gray-900 truncate max-w-xs">{{ log.details.split('\n')[0].substring(0, 50) }}...</span>
+                    <button @click="toggleExpand(log.id)" class="text-gray-400 hover:text-primary-600 transition-colors text-xs font-bold flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-lg">
+                      <span v-if="expandedLog === log.id">إخفاء</span>
+                      <span v-else>عرض التفاصيل</span>
+                      <ChevronUp v-if="expandedLog === log.id" class="w-3 h-3" />
+                      <ChevronDown v-else class="w-3 h-3" />
+                    </button>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <div class="flex flex-col">
+                    <span class="font-medium text-gray-900">{{ log.admin_name || 'النظام' }}</span>
+                    <span class="text-xs text-gray-400">{{ new Date(log.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }) }}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    @click="deleteSingle(log.id)"
+                    class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors"
+                    title="حذف هذا السجل"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="expandedLog === log.id">
+                <td colspan="5" class="px-6 py-4 bg-gray-50/50 border-b border-gray-100">
+                  <div class="text-sm text-gray-900 font-mono text-left dir-ltr whitespace-pre-wrap bg-white p-4 rounded-xl border border-gray-200 shadow-sm max-h-64 overflow-y-auto">
+                    {{ log.details }}
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -116,7 +137,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { RefreshCw, Loader2, AlertCircle, Trash2, ShieldCheck } from 'lucide-vue-next'
+import { RefreshCw, Loader2, AlertCircle, Trash2, ShieldCheck, ChevronDown, ChevronUp, UserPlus, UserCog, UserMinus, CheckCircle, XCircle, Megaphone, Settings, CalendarPlus, CalendarMinus, FolderPlus, FolderEdit, FolderMinus, MessageSquare, Activity } from 'lucide-vue-next'
 import { apiFetch } from '../api/client'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
@@ -127,6 +148,7 @@ const { confirm } = useConfirm()
 interface AuditLog {
   id: number
   admin_id: number
+  admin_name?: string
   action: string
   details: string
   created_at: string
@@ -136,6 +158,36 @@ const logs = ref<AuditLog[]>([])
 const loading = ref(true)
 const error = ref('')
 const selectedIds = ref<number[]>([])
+const expandedLog = ref<number | null>(null)
+
+const actionMap: Record<string, { label: string, color: string, icon: any }> = {
+  WEBHOOK_ERROR: { label: 'خطأ تقني', color: 'red', icon: AlertCircle },
+  WEBHOOK_CRITICAL_ERROR: { label: 'خطأ حرج', color: 'red', icon: AlertCircle },
+  SALARY_CONFIRM_ERROR: { label: 'خطأ الراتب', color: 'red', icon: AlertCircle },
+  ADD_EMPLOYEE: { label: 'إضافة موظف', color: 'emerald', icon: UserPlus },
+  UPDATE_EMPLOYEE: { label: 'تعديل موظف', color: 'blue', icon: UserCog },
+  DELETE_EMPLOYEE: { label: 'إيقاف موظف', color: 'orange', icon: UserMinus },
+  APPROVE_LOAN: { label: 'موافقة سلفة', color: 'emerald', icon: CheckCircle },
+  REJECT_LOAN: { label: 'رفض سلفة', color: 'rose', icon: XCircle },
+  APPROVE_LEAVE: { label: 'موافقة إجازة', color: 'emerald', icon: CheckCircle },
+  REJECT_LEAVE: { label: 'رفض إجازة', color: 'rose', icon: XCircle },
+  BROADCAST: { label: 'بث إعلان', color: 'indigo', icon: Megaphone },
+  UPDATE_SETTING: { label: 'تعديل إعدادات', color: 'gray', icon: Settings },
+  ADD_HOLIDAY: { label: 'إضافة عطلة', color: 'emerald', icon: CalendarPlus },
+  DELETE_HOLIDAY: { label: 'حذف عطلة', color: 'orange', icon: CalendarMinus },
+  ADD_DEPARTMENT: { label: 'إضافة قسم', color: 'blue', icon: FolderPlus },
+  UPDATE_DEPARTMENT: { label: 'تعديل قسم', color: 'blue', icon: FolderEdit },
+  DELETE_DEPARTMENT: { label: 'حذف قسم', color: 'orange', icon: FolderMinus },
+  SEND_MESSAGE: { label: 'إرسال رسالة', color: 'indigo', icon: MessageSquare }
+}
+
+const getActionMeta = (action: string) => {
+  return actionMap[action] || { label: action, color: 'gray', icon: Activity }
+}
+
+const toggleExpand = (id: number) => {
+  expandedLog.value = expandedLog.value === id ? null : id
+}
 
 const fetchLogs = async () => {
   loading.value = true
