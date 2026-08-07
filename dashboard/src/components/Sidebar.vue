@@ -19,9 +19,9 @@
       <div class="flex items-center justify-between h-20 px-4 border-b border-gray-100">
         <div class="flex items-center gap-3 overflow-hidden" :class="isCollapsed ? 'justify-center w-full' : ''">
           <div class="w-10 h-10 flex-shrink-0 rounded-xl bg-primary-50 flex items-center justify-center">
-            <span class="text-primary-600 font-bold text-xl">EK</span>
+            <span class="text-primary-600 font-bold text-xl">CH</span>
           </div>
-          <span v-if="!isCollapsed" class="text-lg font-black text-gray-900 tracking-wider whitespace-nowrap">إي كلاس HR</span>
+          <span v-if="!isCollapsed" class="text-lg font-black text-gray-900 tracking-wider whitespace-nowrap">Challengawy HR</span>
         </div>
         
         <button 
