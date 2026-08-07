@@ -33,7 +33,7 @@ const error = ref('')
 const telegramWidget = ref<HTMLElement | null>(null)
 
 onMounted(() => {
-  const botUsername = import.meta.env.VITE_BOT_USERNAME || 'eklass_hr_bot' 
+  const botUsername = import.meta.env.VITE_BOT_USERNAME || 'challengawy_hr_bot' 
   
   ;(window as any).onTelegramAuth = async (user: any) => {
     try {

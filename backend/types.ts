@@ -11,7 +11,7 @@ export interface Env {
   TIMEZONE?: string;
   API_KEY?: string;
   INITIAL_ADMIN_ID?: string;
-  ALLOWED_ORIGIN?: string; // نطاق الداشبورد — مثال: https://eklass.pages.dev
+  ALLOWED_ORIGIN?: string; // نطاق الداشبورد — مثال: https://challengawy.xyz
 }
 
 export interface Employee {

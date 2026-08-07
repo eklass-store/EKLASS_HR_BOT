@@ -12,9 +12,9 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: 'EKLASS HR Dashboard',
-        short_name: 'EKLASS HR',
-        description: 'لوحة تحكم نظام إدارة الموارد البشرية EKLASS HR',
+        name: 'Challengawy HR Dashboard',
+        short_name: 'Challengawy HR',
+        description: 'لوحة تحكم نظام إدارة الموارد البشرية Challengawy HR',
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
