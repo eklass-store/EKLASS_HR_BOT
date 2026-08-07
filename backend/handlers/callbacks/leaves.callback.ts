@@ -156,6 +156,9 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
 
     const leave = await getLeaveById(env, leaveId);
     if (!leave) return ctx.answerCallbackQuery('الطلب غير موجود!');
+    if (leave.employee_id === admin.id) {
+      return ctx.answerCallbackQuery('لا يمكنك الموافقة على طلبك الشخصي!', { show_alert: true });
+    }
     if (leave.status !== 'pending') {
       return ctx.answerCallbackQuery(`تمت معالجة هذا الطلب مسبقاً (${leave.status})`);
     }
@@ -171,7 +174,10 @@ export function registerLeaveCallbacks(bot: Bot, env: Env): void {
         : `❌ *تم رفض طلب إجازتك*\n📅 ${leave.start_date} ← ${leave.end_date}\nيرجى التواصل مع الإدارة لمزيد من التفاصيل.`;
       try {
         await bot.api.sendMessage(employee.telegram_id, notif, { parse_mode: 'Markdown' });
-      } catch (_) {}
+      } catch (err) {
+        console.error(`Failed to send leave notification to ${employee.telegram_id}`, err);
+        await logAction(env, admin.id, 'NOTIFICATION_FAILED', `Failed to send leave status to ${employee.telegram_id}`);
+      }
     }
 
     await ctx.editMessageText(

@@ -40,6 +40,10 @@ export function calcLateMinutes(checkInTime: string, workStartTime: string): num
   return diff > 0 ? diff : 0;
 }
 
+export function diffMinutes(t1: string, t2: string): number {
+  return toMinutes(t1) - toMinutes(t2);
+}
+
 /**
  * يرجع الشهر الحالي بصيغة YYYY-MM
  */

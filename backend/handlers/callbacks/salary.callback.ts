@@ -6,7 +6,7 @@ import { getTotalActiveLoan } from '../../db/loans.db';
 import { getSettings } from '../../db/settings.db';
 import { getTotalLateMinutes } from '../../db/attendance.db';
 import { getMainMenu } from '../../keyboards/main.keyboards';
-import { getCurrentMonth, getDaysInMonth, calcLateMinutes } from '../../utils/time';
+import { getCurrentMonth, getDaysInMonth, calcLateMinutes, diffMinutes } from '../../utils/time';
 import { InlineKeyboard } from 'grammy';
 import { calculatePayroll } from '../../utils/payroll';
 
@@ -21,7 +21,7 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
 
     const startTime = settings['work_start_time'] ?? '09:00';
     const endTime   = settings['work_end_time'] ?? '17:00';
-    const workMinutes = calcLateMinutes(endTime, startTime) || 480;
+    const workMinutes = diffMinutes(endTime, startTime) || 480;
     
     const deductionMultiplier = parseFloat(settings['late_deduction_per_minute'] ?? '1');
     const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
@@ -80,46 +80,66 @@ export function registerSalaryCallbacks(bot: Bot, env: Env): void {
     await ctx.answerCallbackQuery();
   });
 
-  bot.callbackQuery(/^confirm_payroll_(.+)$/, async (ctx) => {
-    const month = ctx.match[1];
-    const tid = String(ctx.from?.id);
-    const emp = await getEmployeeByTelegramId(env, tid);
+  bot.on('callback_query:data', async (ctx, next) => {
+    const data = ctx.callbackQuery.data;
     
-    if (!emp) return ctx.answerCallbackQuery('أنت غير مسجل!');
 
-    await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'DEBUG_SALARY', ?)").bind(`Clicked for month: ${month}`).run().catch(() => {});
 
-    try {
-      // Check if already confirmed
-      const record = await env.DB.prepare(
-        "SELECT is_confirmed FROM Payroll WHERE employee_id = ? AND month = ?"
-      ).bind(emp.id, month).first();
-
-      if (!record) {
-        return ctx.answerCallbackQuery('لم يتم العثور على سجل راتب لهذا الشهر.');
+    if (data.startsWith('confirm_payroll_')) {
+      const parts = data.split('_');
+      if (parts.length < 4) return next();
+      const targetEmpId = parseInt(parts[2]);
+      const month = parts.slice(3).join('_');
+      
+      const tid = String(ctx.from?.id);
+      const emp = await getEmployeeByTelegramId(env, tid);
+      
+      if (!emp) {
+        try { await ctx.answerCallbackQuery('أنت غير مسجل!'); } catch (_) {}
+        return;
+      }
+      
+      if (emp.id !== targetEmpId) {
+        try { await ctx.answerCallbackQuery('هذا الراتب لا يخصك!', { show_alert: true }); } catch (_) {}
+        return;
       }
 
-      if (record.is_confirmed) {
-        return ctx.answerCallbackQuery('لقد قمت بتأكيد استلام هذا الراتب مسبقاً! ✅', { show_alert: true });
-      }
 
-      // Answer callback immediately to prevent timeout
-      await ctx.answerCallbackQuery('تم تأكيد الاستلام بنجاح! ✅', { show_alert: true });
 
-      // Update the record
-      await env.DB.prepare(
-        "UPDATE Payroll SET is_confirmed = 1, confirmed_at = CURRENT_TIMESTAMP WHERE employee_id = ? AND month = ?"
-      ).bind(emp.id, month).run();
-
-      // Edit message to remove button
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-    } catch (e: any) {
-      console.error(e);
-      await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'SALARY_CONFIRM_ERROR', ?)").bind(String(e.stack || e.message).substring(0, 500)).run().catch(() => {});
       try {
-        await ctx.answerCallbackQuery('حدث خطأ أثناء التأكيد.', { show_alert: true });
-      } catch (inner) {}
+        const record = await env.DB.prepare(
+          "SELECT is_confirmed FROM Payroll WHERE employee_id = ? AND month = ?"
+        ).bind(emp.id, month).first();
+
+        if (!record) {
+          try { await ctx.answerCallbackQuery('لم يتم العثور على سجل راتب لهذا الشهر.'); } catch (_) {}
+          return;
+        }
+
+        if (record.is_confirmed) {
+          try { await ctx.answerCallbackQuery('لقد قمت بتأكيد استلام هذا الراتب مسبقاً! ✅', { show_alert: true }); } catch (_) {}
+          return;
+        }
+
+        try { await ctx.answerCallbackQuery('تم تأكيد الاستلام بنجاح! ✅', { show_alert: true }); } catch (_) {}
+
+        await env.DB.prepare(
+          "UPDATE Payroll SET is_confirmed = 1, confirmed_at = CURRENT_TIMESTAMP WHERE employee_id = ? AND month = ?"
+        ).bind(emp.id, month).run();
+
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+        await ctx.reply(`✅ تم تأكيد استلام راتبك لشهر ${month} بنجاح. شكراً لك!`);
+      } catch (e: any) {
+        console.error(e);
+        await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'SALARY_CONFIRM_ERROR', ?)").bind(String(e.stack || e.message).substring(0, 500)).run().catch(() => {});
+        try {
+          await ctx.answerCallbackQuery('حدث خطأ أثناء التأكيد.', { show_alert: true });
+        } catch (inner) {}
+      }
+      return; // Handled
     }
+    
+    return next(); // pass to other handlers if it's not confirm_payroll
   });
 
 }

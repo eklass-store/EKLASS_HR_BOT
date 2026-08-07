@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS Employees (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     telegram_id   TEXT    UNIQUE NOT NULL,
     full_name     TEXT    NOT NULL,
-    role          TEXT    DEFAULT 'employee',  -- 'admin' | 'manager' | 'employee'
+    role          TEXT    DEFAULT 'employee',  -- 'admin' | 'employee'
     base_salary   REAL    DEFAULT 0,
     department_id INTEGER DEFAULT NULL,
     is_active     INTEGER DEFAULT 1,

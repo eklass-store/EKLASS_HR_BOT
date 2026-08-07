@@ -57,6 +57,9 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
 
     const loan = await getLoanById(env, loanId);
     if (!loan) return ctx.answerCallbackQuery('الطلب غير موجود!');
+    if (loan.employee_id === admin.id) {
+      return ctx.answerCallbackQuery('لا يمكنك الموافقة على طلبك الشخصي!', { show_alert: true });
+    }
     if (loan.status !== 'pending') {
       return ctx.answerCallbackQuery('تمت معالجة هذا الطلب مسبقاً!');
     }
@@ -73,7 +76,10 @@ export function registerLoanCallbacks(bot: Bot, env: Env): void {
         : `❌ *تم رفض طلب سلفتك*\nالمبلغ: ${loan.amount.toFixed(2)} جنيه\nيرجى التواصل مع الإدارة.`;
       try {
         await bot.api.sendMessage(employee.telegram_id, notif, { parse_mode: 'Markdown' });
-      } catch (_) {}
+      } catch (err) {
+        console.error(`Failed to send loan notification to ${employee.telegram_id}`, err);
+        await logAction(env, admin.id, 'NOTIFICATION_FAILED', `Failed to send loan status to ${employee.telegram_id}`);
+      }
     }
 
     await ctx.editMessageText(

@@ -6,10 +6,10 @@ import { getSettings, updateSetting } from '../db/settings.db';
 import { addHoliday, removeHoliday } from '../db/holidays.db';
 import { createAnnouncement } from '../db/announcements.db';
 import { logAction } from '../db/audit.db';
-import { issuePayroll, hasPayrollForMonth } from '../db/payroll.db';
+import { hasPayrollForMonth } from '../db/payroll.db';
 import { getTotalLateMinutes } from '../db/attendance.db';
-import { getTotalActiveLoan, markEmployeeLoansAsPaid } from '../db/loans.db';
-import { getDaysInMonth, calcLateMinutes, isValidDate } from '../utils/time';
+
+import { getDaysInMonth, calcLateMinutes, diffMinutes, isValidDate } from '../utils/time';
 import { escapeMarkdown } from '../utils/markdown';
 import { calculatePayroll } from '../utils/payroll';
 
@@ -128,7 +128,7 @@ export async function handleAdminRoutes(
         await updateEmployeeSalary(env, empId, salary);
       }
       if (data.role !== undefined) {
-        if (!['admin', 'manager', 'employee'].includes(data.role)) return jsonResponse({ error: 'Invalid role' }, 400, env);
+        if (!['admin', 'employee'].includes(data.role)) return jsonResponse({ error: 'Invalid role' }, 400, env);
         await updateEmployeeRole(env, empId, data.role);
       }
       
@@ -318,8 +318,7 @@ export async function handleAdminRoutes(
     const { message } = await request.json() as MessageReq;
     if (!message) return jsonResponse({ error: 'Message required' }, 400, env);
 
-    // [USER-REQUEST] Stop saving public messages to save database space
-    // await createAnnouncement(env, message, adminId || 0);
+    await createAnnouncement(env, message, adminId || 0);
     await logAction(env, adminId, 'BROADCAST', 'Sent broadcast');
 
     const employees = await getAllEmployees(env);
@@ -402,6 +401,9 @@ export async function handleAdminRoutes(
     if (!body.ids || !Array.isArray(body.ids) || body.ids.length === 0) {
       return jsonResponse({ error: 'IDs array is required' }, 400, env);
     }
+    if (body.ids.length > 100) {
+      return jsonResponse({ error: 'الحد الأقصى للحذف في الدفعة الواحدة هو 100 سجل لتجنب ضغط قواعد البيانات.' }, 400, env);
+    }
     
     // Batch delete
     const statements = body.ids.map(id => 
@@ -440,7 +442,7 @@ export async function handleAdminRoutes(
       const settings = await getSettings(env);
     const startTime = settings['work_start_time'] ?? '09:00';
     const endTime = settings['work_end_time'] ?? '17:00';
-    const workMinutes = calcLateMinutes(endTime, startTime) || 480;
+    const workMinutes = diffMinutes(endTime, startTime) || 480;
 
     const employees = await getAllEmployees(env);
     
@@ -519,7 +521,7 @@ export async function handleAdminRoutes(
         msgText += `إجمالي الخصومات/السلف: ${payroll.totalDed.toFixed(2)} ج.م\n*الصافي المستحق:* ${payroll.netSalary.toFixed(2)} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
         const keyboard = {
           inline_keyboard: [[
-            { text: "✅ تأكيد الاستلام", callback_data: `confirm_payroll_${month}` }
+            { text: "✅ تأكيد الاستلام", callback_data: `confirm_payroll_${employee.id}_${month}` }
           ]]
         };
         notificationPromises.push(

@@ -114,17 +114,6 @@ export async function handleApiRoutes(
     }
   }
 
-  if (request.method === 'GET' && url.pathname === '/api/webhook-info') {
-    try {
-      const tgUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`;
-      const res = await fetch(tgUrl);
-      const data = await res.json();
-      return jsonResponse(data);
-    } catch (err: any) {
-      return jsonResponse({ error: err.message }, 500);
-    }
-  }
-
   // ── Authentication Middleware for Dashboard API ───────────────
   // We allow either JWT via Authorization header or API Key via X-API-KEY
   let isAuthenticated = false;
@@ -145,8 +134,19 @@ export async function handleApiRoutes(
   }
 
   const apiKeyHeader = request.headers.get('X-API-KEY');
-  if (env.API_KEY && apiKeyHeader === env.API_KEY) {
-    isAuthenticated = true;
+  if (env.API_KEY && apiKeyHeader) {
+    const encoder = new TextEncoder();
+    const a = encoder.encode(env.API_KEY);
+    const b = encoder.encode(apiKeyHeader);
+    if (a.byteLength === b.byteLength) {
+      let isEqual = 0;
+      for (let i = 0; i < a.byteLength; i++) {
+        isEqual |= a[i] ^ b[i];
+      }
+      if (isEqual === 0) {
+        isAuthenticated = true;
+      }
+    }
   }
 
   if (!isAuthenticated) {
@@ -154,6 +154,17 @@ export async function handleApiRoutes(
       status: 401, 
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } 
     });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/webhook-info') {
+    try {
+      const tgUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`;
+      const res = await fetch(tgUrl);
+      const data = await res.json();
+      return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } });
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) } });
+    }
   }
 
 

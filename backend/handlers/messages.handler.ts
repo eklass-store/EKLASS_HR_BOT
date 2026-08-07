@@ -224,7 +224,14 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
       if (!emp) { await clearState(env, tid); return; }
 
       const amount = data['amount'] as number;
-      const loanId = await createLoan(env, emp.id, amount, text);
+      let loanId: number;
+      try {
+        loanId = await createLoan(env, emp.id, amount, text);
+      } catch (err: any) {
+        await clearState(env, tid);
+        const msg = err.message.includes('pending loan') ? 'لديك طلب سلفة قيد الانتظار بالفعل.' : err.message;
+        return ctx.reply(`⚠️ عذراً، لا يمكن معالجة طلبك: ${msg}`, { reply_markup: getMainMenu(emp.role === 'admin') });
+      }
 
       // إشعار الأدمن
       const admins = await getAdmins(env);

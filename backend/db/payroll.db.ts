@@ -3,20 +3,6 @@
 // ============================================================
 import { Env, PayrollRecord } from '../types';
 
-/** يصدر راتب موظف لشهر معين */
-export async function issuePayroll(
-  env: Env,
-  employeeId: number,
-  month: string,
-  baseSalary: number,
-  totalDeductions: number,
-  netSalary: number
-): Promise<number> {
-  const result = await env.DB.prepare(
-    "INSERT INTO Payroll (employee_id, month, base_salary, total_deductions, net_salary, status) VALUES (?, ?, ?, ?, ?, 'issued')"
-  ).bind(employeeId, month, baseSalary, totalDeductions, netSalary).run();
-  return result.meta.last_row_id as number;
-}
 
 /** آخر 6 رواتب للموظف */
 export async function getEmployeePayroll(env: Env, employeeId: number): Promise<PayrollRecord[]> {

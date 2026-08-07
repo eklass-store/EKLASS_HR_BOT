@@ -14,17 +14,13 @@ import { registerSalaryCallbacks }     from './handlers/callbacks/salary.callbac
 import { registerAdminCallbacks }      from './handlers/callbacks/admin.callback';
 import { registerMessageHandler } from './handlers/messages.handler';
 
-export const handleWebhook = async (request: Request, env: Env): Promise<Response> => {
-  if (!env.BOT_TOKEN) {
-    return new Response('BOT_TOKEN is missing', { status: 500 });
-  }
-  if (env.WEBHOOK_SECRET) {
-    const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
-    if (secret !== env.WEBHOOK_SECRET) {
-      return new Response('Unauthorized', { status: 401 });
-    }
-  }
-  const bot = new Bot(env.BOT_TOKEN);
+let bot: Bot | null = null;
+let cb: any = null;
+
+function getBot(env: Env) {
+  if (bot) return { bot, cb };
+  
+  bot = new Bot(env.BOT_TOKEN);
 
   // ── Error Handling Middleware ──
   // MUST be registered before any handlers to catch their errors!
@@ -61,11 +57,25 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
 
   registerMessageHandler(bot, env);
 
+  cb = webhookCallback(bot, 'cloudflare-mod');
+  return { bot, cb };
+}
 
+export const handleWebhook = async (request: Request, env: Env): Promise<Response> => {
+  if (!env.BOT_TOKEN) {
+    return new Response('BOT_TOKEN is missing', { status: 500 });
+  }
+  if (env.WEBHOOK_SECRET) {
+    const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    if (secret !== env.WEBHOOK_SECRET) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+  }
+  
+  const { cb: currentCb } = getBot(env);
 
   try {
-    const cb = webhookCallback(bot, 'cloudflare-mod');
-    return await cb(request);
+    return await currentCb(request);
   } catch (err: any) {
     console.error('[Webhook Error]', err);
     try {

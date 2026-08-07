@@ -36,6 +36,9 @@ export async function exportEmployeesExcel(env: Env): Promise<Response> {
       created_at: e.created_at
     });
   }
+  if (result.results.length === 5000) {
+    worksheet.addRow({ full_name: '⚠️ تحذير: تم الوصول للحد الأقصى للتصدير (5000 سجل).' });
+  }
   
   // Generate buffer
   const buffer = await workbook.xlsx.writeBuffer();
@@ -84,6 +87,9 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
       receipt_status: row.is_confirmed ? `تم الاستلام (${row.confirmed_at})` : (row.payroll_status === 'issued' ? 'في انتظار التأكيد' : '---')
     });
   }
+  if (result.results.length === 5000) {
+    worksheet.addRow({ full_name: '⚠️ تحذير: تم الوصول للحد الأقصى للتصدير (5000 سجل).' });
+  }
 
   const buffer = await workbook.xlsx.writeBuffer();
   
@@ -106,10 +112,17 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   const bonusRate = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
   const startTime = settings['work_start_time'] ?? '09:00';
   const endTime = settings['work_end_time'] ?? '17:00';
-  const { calcLateMinutes } = await import('../utils/time');
-  const workMinutes = calcLateMinutes(endTime, startTime) || 480;
+  const { diffMinutes } = await import('../utils/time');
+  const workMinutes = diffMinutes(endTime, startTime) || 480;
 
   const startObj = new Date(startDate);
+  const endObj = new Date(endDate);
+  if (startObj.getMonth() !== endObj.getMonth() || startObj.getFullYear() !== endObj.getFullYear()) {
+    return new Response(JSON.stringify({ error: 'التقرير الشامل يدعم شهراً واحداً فقط كحد أقصى لضمان دقة حساب الراتب.' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
   const daysInMonth = new Date(startObj.getFullYear(), startObj.getMonth() + 1, 0).getDate();
 
   sheet.columns = [
@@ -187,6 +200,9 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       loan_deduction: payroll.loanDeducted,
       net_salary: payroll.netSalary
     });
+  }
+  if (empRes.results.length === 5000) {
+    sheet.addRow({ full_name: '⚠️ تحذير: تم الوصول للحد الأقصى للتصدير (5000 سجل).' });
   }
 
   // Formatting styling

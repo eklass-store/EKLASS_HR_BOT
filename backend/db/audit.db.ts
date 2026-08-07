@@ -9,8 +9,13 @@ export async function logAction(
   action: string,
   details: string
 ): Promise<void> {
-  // Audit Logs are disabled by user request to save space.
-  console.log(`[Audit] Admin: ${adminId} | Action: ${action} | Details: ${details}`);
+  try {
+    await env.DB.prepare(
+      "INSERT INTO AuditLogs (admin_id, action, details) VALUES (?, ?, ?)"
+    ).bind(adminId, action, details).run();
+  } catch (err) {
+    console.error(`[Audit Error] Failed to log action: ${err}`);
+  }
 }
 
 export async function getRecentAuditLogs(env: Env, limit: number = 10): Promise<any[]> {

@@ -1,0 +1,10 @@
+DELETE FROM AuditLogs;
+DELETE FROM AuthNonces;
+DELETE FROM ConversationState;
+DELETE FROM Announcements;
+DELETE FROM Payroll;
+DELETE FROM Loans;
+DELETE FROM Leaves;
+DELETE FROM Attendance;
+DELETE FROM Employees WHERE role != 'admin';
+DELETE FROM Departments WHERE id NOT IN (SELECT department_id FROM Employees WHERE department_id IS NOT NULL);

@@ -23,8 +23,7 @@ export function registerBroadcastCommand(bot: Bot, env: Env): void {
       );
     }
 
-    // [USER-REQUEST] Stop saving public messages to save database space
-    // await createAnnouncement(env, text, admin.id);
+    await createAnnouncement(env, text, admin.id);
 
     const employees = await getAllEmployees(env);
     let sentCount = 0;
