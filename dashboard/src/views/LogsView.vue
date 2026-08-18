@@ -190,7 +190,8 @@ const actionMap: Record<string, { label: string, color: string, icon: any }> = {
   ADD_DEPARTMENT: { label: 'إضافة قسم', color: 'blue', icon: FolderPlus },
   UPDATE_DEPARTMENT: { label: 'تعديل قسم', color: 'blue', icon: FolderEdit },
   DELETE_DEPARTMENT: { label: 'حذف قسم', color: 'orange', icon: FolderMinus },
-  SEND_MESSAGE: { label: 'إرسال رسالة', color: 'indigo', icon: MessageSquare }
+  SEND_MESSAGE: { label: 'إرسال رسالة', color: 'indigo', icon: MessageSquare },
+  DELETE_AUDIT_LOGS: { label: 'حذف سجلات التدقيق', color: 'red', icon: Trash2 }
 }
 
 const getActionMeta = (action: string) => {
