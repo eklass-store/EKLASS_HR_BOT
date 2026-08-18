@@ -50,7 +50,7 @@ export function calculatePayroll(input: PayrollInput): PayrollCalculation {
   const overtimeBonus = overtimeMinutes * minuteRate * bonusMultiplier;
   const absenceDeduction = Math.max(0, absenceDays) * Math.max(0, absenceDeductionPerDay);
 
-  const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction + overtimeBonus);
+  const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction - absenceDeduction + overtimeBonus);
   const loanDeducted = Math.min(activeLoan, availableForLoan);
 
   const totalDed = lateDeduction + absenceDeduction + loanDeducted;
