@@ -8,6 +8,8 @@ export interface PayrollInput {
   lateMinutes: number;
   overtimeMinutes: number;
   activeLoan: number;
+  absenceDays?: number;
+  absenceDeductionPerDay?: number;
   daysInMonth: number;
   deductionMultiplier?: number;
   bonusMultiplier?: number;
@@ -19,6 +21,7 @@ export interface PayrollCalculation {
   minuteRate: number;
   lateDeduction: number;
   overtimeBonus: number;
+  absenceDeduction: number;
   availableForLoan: number;
   loanDeducted: number;
   totalDed: number;
@@ -32,6 +35,8 @@ export function calculatePayroll(input: PayrollInput): PayrollCalculation {
     lateMinutes,
     overtimeMinutes,
     activeLoan,
+    absenceDays = 0,
+    absenceDeductionPerDay = 0,
     daysInMonth,
     deductionMultiplier = 1,
     bonusMultiplier = 1,
@@ -43,11 +48,12 @@ export function calculatePayroll(input: PayrollInput): PayrollCalculation {
 
   const lateDeduction = lateMinutes * minuteRate * deductionMultiplier;
   const overtimeBonus = overtimeMinutes * minuteRate * bonusMultiplier;
+  const absenceDeduction = Math.max(0, absenceDays) * Math.max(0, absenceDeductionPerDay);
 
   const availableForLoan = Math.max(0, dynamicMonthSalary - lateDeduction + overtimeBonus);
   const loanDeducted = Math.min(activeLoan, availableForLoan);
 
-  const totalDed = lateDeduction + loanDeducted;
+  const totalDed = lateDeduction + absenceDeduction + loanDeducted;
   const netSalary = Math.max(0, dynamicMonthSalary - totalDed + overtimeBonus);
 
   return {
@@ -56,6 +62,7 @@ export function calculatePayroll(input: PayrollInput): PayrollCalculation {
     minuteRate,
     lateDeduction,
     overtimeBonus,
+    absenceDeduction,
     availableForLoan,
     loanDeducted,
     totalDed,
