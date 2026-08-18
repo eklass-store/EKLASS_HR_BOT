@@ -161,6 +161,19 @@ export function registerMessageHandler(bot: Bot, env: Env): void {
         );
       }
 
+      const requestedMonth = startDate.slice(0, 7);
+      const monthlyRows = await env.DB.prepare(
+        "SELECT CAST(SUM(julianday(end_date) - julianday(start_date) + 1) AS INTEGER) AS c FROM Leaves WHERE employee_id = ? AND status IN ('approved', 'pending') AND start_date LIKE ?"
+      ).bind(emp.id, requestedMonth + '%').first() as any;
+      const monthlyUsed = Number(monthlyRows?.c || 0);
+      if (monthlyUsed + requestedDays > balance.monthlyQuota) {
+        await clearState(env, tid);
+        return ctx.reply(
+          `⚠️ الحد الشهري للإجازات هو ${balance.monthlyQuota} يوم. المستخدم/المعلق: ${monthlyUsed} يوم.`,
+          { reply_markup: getMainMenu(emp.role === 'admin') }
+        );
+      }
+
       const leaveId = await createLeave(env, emp.id, startDate, endDate, type, reason);
       if (!leaveId) {
         await clearState(env, tid);

@@ -4,10 +4,11 @@
 import * as ExcelJS from 'exceljs';
 import { Env } from '../types';
 import { calculatePayroll } from '../utils/payroll';
+import { isWeekend } from '../utils/time';
 
 export async function exportEmployeesExcel(env: Env): Promise<Response> {
   const result = await env.DB.prepare(
-    "SELECT e.id, e.telegram_id, e.full_name, e.role, e.base_salary, d.name as department_name, e.is_active, e.created_at FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name LIMIT 5000"
+    "SELECT e.id, e.telegram_id, e.full_name, e.role, e.base_salary, d.name as department_name, e.is_active, e.created_at FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id ORDER BY e.full_name"
   ).all();
   
   const workbook = new ExcelJS.Workbook();
@@ -58,7 +59,7 @@ export async function exportMonthlyReport(env: Env, month: string): Promise<Resp
     LEFT JOIN Payroll p ON e.id = p.employee_id AND p.month = ?
     WHERE e.is_active = 1
     ORDER BY e.full_name
-    LIMIT 5000
+   
   `).bind(month).all();
 
   const workbook = new ExcelJS.Workbook();
@@ -115,14 +116,55 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   const { diffMinutes } = await import('../utils/time');
   const workMinutes = diffMinutes(endTime, startTime) || 480;
 
-  const startObj = new Date(startDate);
-  const endObj = new Date(endDate);
-  if (startObj.getMonth() !== endObj.getMonth() || startObj.getFullYear() !== endObj.getFullYear()) {
-    return new Response(JSON.stringify({ error: 'التقرير الشامل يدعم شهراً واحداً فقط كحد أقصى لضمان دقة حساب الراتب.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
+  const startObj = new Date(startDate + 'T12:00:00');
+  const endObj = new Date(endDate + 'T12:00:00');
+  if (Number.isNaN(startObj.getTime()) || Number.isNaN(endObj.getTime()) || startObj > endObj) {
+    return new Response(JSON.stringify({ error: 'نطاق التاريخ غير صحيح.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const startMonth = startDate.slice(0, 7);
+  const endMonth = endDate.slice(0, 7);
+  if (startMonth !== endMonth) {
+    const periodRes = await env.DB.prepare(`
+      SELECT p.month, e.id, e.full_name, d.name as department_name,
+             p.base_salary, p.total_bonuses, p.total_deductions, p.net_salary,
+             p.status, p.is_confirmed, p.confirmed_at
+      FROM Payroll p
+      JOIN Employees e ON e.id = p.employee_id
+      LEFT JOIN Departments d ON d.id = e.department_id
+      WHERE p.month >= ? AND p.month <= ?
+      ORDER BY p.month, e.full_name
+    `).bind(startMonth, endMonth).all();
+
+    const periodSheet = workbook.addWorksheet('التقرير الشهري المجمع');
+    periodSheet.columns = [
+      { header: 'الشهر', key: 'month', width: 12 },
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'الاسم', key: 'full_name', width: 28 },
+      { header: 'القسم', key: 'department_name', width: 20 },
+      { header: 'الراتب الأساسي', key: 'base_salary', width: 16 },
+      { header: 'الإضافي', key: 'total_bonuses', width: 14 },
+      { header: 'إجمالي الخصومات', key: 'total_deductions', width: 18 },
+      { header: 'الصافي', key: 'net_salary', width: 16 },
+      { header: 'الحالة', key: 'status', width: 14 },
+      { header: 'تأكيد الاستلام', key: 'is_confirmed', width: 18 }
+    ];
+    for (const row of periodRes.results as any[]) {
+      periodSheet.addRow({ ...row, department_name: row.department_name ?? 'بدون قسم', is_confirmed: row.is_confirmed ? 'تم التأكيد' : 'لم يؤكد' });
+    }
+    if (periodRes.results.length === 0) {
+      periodSheet.addRow({ full_name: 'لا توجد رواتب مصدرة في النطاق المحدد.' });
+    }
+    periodSheet.getRow(1).font = { bold: true };
+    const periodBuffer = await workbook.xlsx.writeBuffer();
+    return new Response(periodBuffer as ArrayBuffer, {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="Payroll_Report_${startDate}_${endDate}.xlsx"`
+      }
     });
   }
+
   const daysInMonth = new Date(startObj.getFullYear(), startObj.getMonth() + 1, 0).getDate();
 
   sheet.columns = [
@@ -131,6 +173,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     { header: 'القسم', key: 'department_name', width: 20 },
     { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
     { header: 'أيام الحضور', key: 'present_days', width: 15 },
+    { header: 'أيام الغياب المحتسبة', key: 'absence_days', width: 18 },
+    { header: 'قيمة خصم الغياب', key: 'absence_deduction', width: 18 },
     { header: 'دقائق التأخير', key: 'late_minutes', width: 15 },
     { header: 'قيمة خصم التأخير', key: 'late_deduction', width: 15 },
     { header: 'دقائق الأوفر تايم', key: 'overtime_minutes', width: 15 },
@@ -141,7 +185,7 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   ];
 
   const empRes = await env.DB.prepare(
-    "SELECT e.id, e.full_name, e.base_salary, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name LIMIT 5000"
+    "SELECT e.id, e.full_name, e.base_salary, d.name as department_name FROM Employees e LEFT JOIN Departments d ON e.department_id = d.id WHERE e.is_active = 1 ORDER BY e.full_name"
   ).all();
 
   // Fetch attendance aggregates
@@ -150,14 +194,28 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     FROM Attendance
     WHERE date >= ? AND date <= ?
     GROUP BY employee_id
-    LIMIT 5000
+   
   `).bind(startDate, endDate).all();
   
   const attMap = new Map((attRes.results as any[]).map(r => [r.employee_id, {
-    present_days: r.present_days || 0,
-    late_minutes: r.late_minutes || 0,
-    overtime_minutes: r.overtime_minutes || 0
+    present_days: Number(r.present_days || 0),
+    late_minutes: Number(r.late_minutes || 0),
+    overtime_minutes: Number(r.overtime_minutes || 0)
   }]));
+
+  const holidayRes = await env.DB.prepare('SELECT holiday_date FROM Holidays WHERE holiday_date >= ? AND holiday_date <= ?').bind(startDate, endDate).all();
+  const holidays = new Set((holidayRes.results as any[]).map(r => String(r.holiday_date)));
+  let workingDays = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = startDate.slice(0, 8) + String(day).padStart(2, '0');
+    if (!isWeekend(date) && !holidays.has(date)) workingDays++;
+  }
+  const presentMap = new Map((attRes.results as any[]).map(r => [r.employee_id, Number(r.present_days || 0)]));
+  const leaveRes = await env.DB.prepare('SELECT employee_id, SUM(julianday(end_date) - julianday(start_date) + 1) AS leave_days FROM Leaves WHERE status = \'approved\' AND start_date <= ? AND end_date >= ? GROUP BY employee_id').bind(endDate, startDate).all();
+  const leaveMap = new Map((leaveRes.results as any[]).map(r => [r.employee_id, Number(r.leave_days || 0)]));
+  const absenceEnabled = String(settings['absence_deduction_enabled'] ?? '0') === '1';
+  const paidAbsenceAllowance = Math.max(0, Number(settings['monthly_paid_leave_days'] ?? 0));
+  const absenceDeductionPerDay = Math.max(0, Number(settings['absence_deduction_per_day'] ?? 0));
 
   // Fetch ALL active loans (remaining_amount) regardless of creation date
   const activeLoansRes = await env.DB.prepare(`
@@ -165,13 +223,17 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     FROM Loans
     WHERE status = 'approved'
     GROUP BY employee_id
-    LIMIT 5000
+   
   `).all();
   const loansMap = new Map((activeLoansRes.results as any[]).map(r => [r.employee_id, r.total_loans]));
 
   for (const emp of empRes.results as any[]) {
     const att = attMap.get(emp.id) || { present_days: 0, late_minutes: 0, overtime_minutes: 0 };
     const loansAmount = loansMap.get(emp.id) || 0;
+    const presentDays = presentMap.get(emp.id) || 0;
+    const approvedLeaveDays = leaveMap.get(emp.id) || 0;
+    const rawAbsenceDays = Math.max(0, workingDays - presentDays - approvedLeaveDays);
+    const absenceDays = absenceEnabled ? Math.max(0, rawAbsenceDays - paidAbsenceAllowance) : 0;
     
     const base_salary = emp.base_salary || 0;
     
@@ -181,6 +243,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       lateMinutes: att.late_minutes,
       overtimeMinutes: att.overtime_minutes,
       activeLoan: loansAmount,
+      absenceDays,
+      absenceDeductionPerDay,
       daysInMonth,
       deductionMultiplier: deductionRate,
       bonusMultiplier: bonusRate
@@ -191,6 +255,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       full_name: emp.full_name,
       department_name: emp.department_name ?? 'بدون قسم',
       base_salary: base_salary,
+      absence_days: absenceDays,
+      absence_deduction: payroll.absenceDeduction,
       present_days: att.present_days,
       late_minutes: att.late_minutes,
       late_deduction: payroll.lateDeduction,

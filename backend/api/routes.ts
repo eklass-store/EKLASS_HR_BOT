@@ -171,7 +171,8 @@ export async function handleApiRoutes(
 
   // ── POST /api/set-webhook (Requires Auth) ─────────────────────
   if (request.method === 'POST' && url.pathname === '/api/set-webhook') {
-    const webhookUrl = `https://${url.host}/api/webhook`;
+    const publicBase = (env.PUBLIC_APP_URL || 'https://challengawy-hr.pages.dev').replace(/\\/$/, '');
+    const webhookUrl = `${publicBase}/api/webhook`;
     let apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}`;
     if (env.WEBHOOK_SECRET) {
       apiUrl += `&secret_token=${env.WEBHOOK_SECRET}`;

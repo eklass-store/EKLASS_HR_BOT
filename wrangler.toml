@@ -10,5 +10,6 @@ database_id = "2da97664-e325-476c-b574-3d3fea17770f"
 
 [vars]
 TIMEZONE = "Africa/Cairo"
+PUBLIC_APP_URL = "https://challengawy-hr.pages.dev"
 # باقي المتغيرات الحساسة (BOT_TOKEN, JWT_SECRET, WEBHOOK_SECRET, ALLOWED_ORIGIN...)
 # تُضاف من Cloudflare Dashboard فقط — لا تُكتب هنا

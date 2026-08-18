@@ -40,14 +40,13 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
     const isOffDay = isWeekend(date) || await isHoliday(env, date);
 
-    // منع تسجيل الحضور المبكر جداً (قبل أكثر من ساعتين من موعد الدوام)
+    // التحكم في التسجيل المبكر من إعدادات النظام.
     const { toMinutes } = await import('../../utils/time');
     const startMins = toMinutes(startTime);
     const currMins = toMinutes(time);
-    
-    // نسمح بتسجيل الحضور قبل الدوام بـ 120 دقيقة كحد أقصى (ساعتين)
-    // إذا كان اليوم ليس عطلة
-    if (!isOffDay && currMins < startMins - 120) {
+    const earliestMinutes = Math.max(0, Number(settings['earliest_checkin_minutes'] ?? 120));
+
+    if (!isOffDay && currMins < startMins - earliestMinutes) {
        await ctx.editMessageText(
          `⚠️ *وقت مبكر جداً!*\n\nلا يمكنك تسجيل الحضور الآن.\nموعد بدء الدوام هو: *${startTime}*\n_(يمكنك تسجيل الحضور قبل الموعد بساعتين كحد أقصى)_`, 
          { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
@@ -55,11 +54,14 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
        return ctx.answerCallbackQuery();
     }
 
-    // لا يتم حساب تأخير في أيام الإجازات والعطل
-    const lateMinutes = isOffDay ? 0 : calcLateMinutes(time, startTime);
+    // لا يتم حساب تأخير في أيام الإجازات والعطل، وتُخصم فترة السماح.
+    const graceMinutes = Math.max(0, Number(settings['late_grace_minutes'] ?? 0));
+    const rawLateMinutes = isOffDay ? 0 : calcLateMinutes(time, startTime);
+    const lateMinutes = Math.max(0, rawLateMinutes - graceMinutes);
+    const absenceThreshold = Math.max(0, Number(settings['late_absence_threshold_minutes'] ?? 60));
 
-    // المنع من الحضور بعد ساعة (غياب تلقائي)
-    if (lateMinutes > 60) {
+    // بعد حد الغياب تُسجل الحالة غياباً ولا يسمح بتسجيل حضور متأخر.
+    if (rawLateMinutes > absenceThreshold) {
       await createAttendance(env, emp.id, date, null, 0);
       await ctx.editMessageText(
         `❌ *عفواً! لقد تجاوزت حد التأخير المسموح به (ساعة).* \n\nوقت الدوام: ${startTime}\nوقتك الحالي: ${time}\nالتأخير: ${lateMinutes} دقيقة\n\nتم تسجيلك **غياب** لهذا اليوم ولن تتمكن من تسجيل الحضور.`,

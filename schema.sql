@@ -36,7 +36,15 @@ INSERT OR IGNORE INTO Settings (key, value) VALUES
     ('late_deduction_per_minute', '0'),     -- NEW: جنيه لكل دقيقة تأخير
     ('annual_leave_quota',        '21'),    -- NEW: الحصة السنوية للإجازات
     ('max_loan_percentage',       '50'),    -- NEW: الحد الأقصى للسلفة (نسبة مئوية من الراتب)
-    ('overtime_bonus_per_minute', '0');     -- NEW: مكافأة الأوفر تايم لكل دقيقة
+    ('overtime_bonus_per_minute', '0'),
+    ('late_grace_minutes', '0'),
+    ('earliest_checkin_minutes', '120'),
+    ('late_absence_threshold_minutes', '60'),
+    ('monthly_paid_leave_days', '2'),
+    ('absence_deduction_enabled', '0'),
+    ('absence_deduction_per_day', '0'),
+    ('attendance_bonus_threshold_days', '15'),
+    ('attendance_bonus_leave_days', '4');
 
 -- ── جدول الحضور والانصراف ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS Attendance (
@@ -98,6 +106,23 @@ CREATE TABLE IF NOT EXISTS Payroll (
 );
 
 -- ── جدول التعاميم ───────────────────────────────────────────
+-- ── سجل أقساط السلف المرتبط بالراتب ───────────────────────
+CREATE TABLE IF NOT EXISTS LoanPayments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loan_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    payroll_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    amount REAL NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(loan_id) REFERENCES Loans(id),
+    FOREIGN KEY(employee_id) REFERENCES Employees(id),
+    FOREIGN KEY(payroll_id) REFERENCES Payroll(id),
+    UNIQUE(loan_id, payroll_id)
+);
+CREATE INDEX IF NOT EXISTS idx_loan_payments_month ON LoanPayments(month);
+CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON LoanPayments(loan_id);
+
 CREATE TABLE IF NOT EXISTS Announcements (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     message    TEXT    NOT NULL,
