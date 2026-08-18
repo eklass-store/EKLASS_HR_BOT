@@ -412,20 +412,25 @@ export async function handleAdminRoutes(
   }
 
   if (path === '/api/admin/audit-logs' && method === 'DELETE') {
-    const body = await request.json() as { ids?: number[] };
-    if (!body.ids || !Array.isArray(body.ids) || body.ids.length === 0) {
+    const body = await request.json() as { ids?: unknown };
+    if (!Array.isArray(body.ids) || body.ids.length === 0) {
       return jsonResponse({ error: 'IDs array is required' }, 400, env);
     }
     if (body.ids.length > 100) {
       return jsonResponse({ error: 'الحد الأقصى للحذف في الدفعة الواحدة هو 100 سجل لتجنب ضغط قواعد البيانات.' }, 400, env);
     }
-    
-    // Batch delete
-    const statements = body.ids.map(id => 
+    const ids = body.ids.filter((id): id is number => Number.isInteger(id) && id > 0);
+    if (ids.length !== body.ids.length) {
+      return jsonResponse({ error: 'كل معرّفات السجل يجب أن تكون أرقاماً صحيحة موجبة.' }, 400, env);
+    }
+
+    const statements = ids.map(id =>
       env.DB.prepare('DELETE FROM AuditLogs WHERE id = ?').bind(id)
     );
     await env.DB.batch(statements);
-    return jsonResponse({ success: true, count: statements.length }, 200, env);
+    // Keep an accountability event for the destructive operation itself.
+    await logAction(env, adminId, 'DELETE_AUDIT_LOGS', 'Deleted ' + ids.length + ' audit log record(s)');
+    return jsonResponse({ success: true, count: ids.length }, 200, env);
   }
 
   // ── GET Payroll List ──────────────────────────────────────────
