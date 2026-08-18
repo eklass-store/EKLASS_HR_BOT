@@ -21,7 +21,7 @@
           <div class="w-10 h-10 flex-shrink-0 rounded-xl bg-primary-50 flex items-center justify-center">
             <span class="text-primary-600 font-bold text-xl">CH</span>
           </div>
-          <span v-if="!isCollapsed" class="text-lg font-black text-gray-900 tracking-wider whitespace-nowrap">Challengawy HR</span>
+          <span v-if="!isCollapsed" class="text-lg font-black text-gray-900 tracking-wider whitespace-nowrap">Challengawy</span>
         </div>
         
         <button 
