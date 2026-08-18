@@ -386,14 +386,29 @@ export async function handleAdminRoutes(
 
   // ── Audit Logs ──────────────────────────────────────────────
   if (path === '/api/admin/audit-logs' && method === 'GET') {
-    const res = await env.DB.prepare(`
-      SELECT a.*, e.full_name as admin_name 
-      FROM AuditLogs a 
-      LEFT JOIN Employees e ON a.admin_id = e.id 
-      ORDER BY a.created_at DESC 
-      LIMIT 100
-    `).all();
-    return jsonResponse(res.results, 200, env);
+    const limitRaw = Number(url.searchParams.get('limit') || '50');
+    const offsetRaw = Number(url.searchParams.get('offset') || '0');
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 100) : 50;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(Math.floor(offsetRaw), 0) : 0;
+    const action = (url.searchParams.get('action') || '').trim().slice(0, 50);
+    const where = action ? 'WHERE a.action = ?' : '';
+    const params = action ? [action] : [];
+    const [rows, count] = await Promise.all([
+      env.DB.prepare(`
+        SELECT a.*, e.full_name as admin_name
+        FROM AuditLogs a
+        LEFT JOIN Employees e ON a.admin_id = e.id
+        ${where}
+        ORDER BY a.created_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset).all(),
+      env.DB.prepare(`SELECT COUNT(*) as total FROM AuditLogs a ${where}`).bind(...params).first<{ total: number }>()
+    ]);
+    return jsonResponse({
+      items: rows.results,
+      pagination: { limit, offset, total: Number(count?.total || 0), hasMore: offset + rows.results.length < Number(count?.total || 0) },
+      filter: action || null
+    }, 200, env);
   }
 
   if (path === '/api/admin/audit-logs' && method === 'DELETE') {
