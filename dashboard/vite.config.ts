@@ -12,9 +12,9 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: 'Challengawy HR Dashboard',
-        short_name: 'Challengawy HR',
-        description: 'لوحة تحكم نظام إدارة الموارد البشرية Challengawy HR',
+        name: 'Challengawy',
+        short_name: 'Challengawy',
+        description: 'لوحة تحكم نظام Challengawy لإدارة الموارد البشرية',
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
