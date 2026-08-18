@@ -9,7 +9,7 @@ import { logAction } from '../db/audit.db';
 import { hasPayrollForMonth } from '../db/payroll.db';
 import { getTotalLateMinutes } from '../db/attendance.db';
 
-import { getDaysInMonth, calcLateMinutes, diffMinutes, isValidDate } from '../utils/time';
+import { getDaysInMonth, calcLateMinutes, diffMinutes, isValidDate, isWeekend } from '../utils/time';
 import { escapeMarkdown } from '../utils/markdown';
 import { calculatePayroll } from '../utils/payroll';
 
@@ -475,13 +475,28 @@ export async function handleAdminRoutes(
     const endDate = `${month}-${daysInMonth}`;
 
     const lateRes = await env.DB.prepare("SELECT employee_id, SUM(late_minutes) as total_late FROM Attendance WHERE date >= ? AND date <= ? GROUP BY employee_id").bind(startDate, endDate).all();
-    const lateMap = new Map((lateRes.results as any[]).map(r => [r.employee_id, r.total_late || 0]));
+    const lateMap = new Map((lateRes.results as any[]).map(r => [r.employee_id, Number(r.total_late || 0)]));
 
-      const otRes = await env.DB.prepare("SELECT employee_id, SUM(overtime_minutes) as total_ot FROM Attendance WHERE date >= ? AND date <= ? GROUP BY employee_id").bind(startDate, endDate).all();
-      const otMap = new Map((otRes.results as any[]).map(r => [r.employee_id, r.total_ot || 0]));
-      
-      const deductionMultiplier = parseFloat(settings['late_deduction_per_minute'] ?? '1');
-      const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
+    const otRes = await env.DB.prepare("SELECT employee_id, SUM(overtime_minutes) as total_ot FROM Attendance WHERE date >= ? AND date <= ? GROUP BY employee_id").bind(startDate, endDate).all();
+    const otMap = new Map((otRes.results as any[]).map(r => [r.employee_id, Number(r.total_ot || 0)]));
+
+    const presentRes = await env.DB.prepare("SELECT employee_id, COUNT(*) as present_days FROM Attendance WHERE date >= ? AND date <= ? AND check_in_time IS NOT NULL GROUP BY employee_id").bind(startDate, endDate).all();
+    const presentMap = new Map((presentRes.results as any[]).map(r => [r.employee_id, Number(r.present_days || 0)]));
+    const leaveRes = await env.DB.prepare("SELECT employee_id, SUM(julianday(end_date) - julianday(start_date) + 1) as leave_days FROM Leaves WHERE status = 'approved' AND start_date <= ? AND end_date >= ? GROUP BY employee_id").bind(endDate, startDate).all();
+    const leaveMap = new Map((leaveRes.results as any[]).map(r => [r.employee_id, Number(r.leave_days || 0)]));
+    const holidayRes = await env.DB.prepare("SELECT holiday_date FROM Holidays WHERE holiday_date >= ? AND holiday_date <= ?").bind(startDate, endDate).all();
+    const holidays = new Set((holidayRes.results as any[]).map(r => String(r.holiday_date)));
+    let workingDays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = month + '-' + String(day).padStart(2, '0');
+      if (!isWeekend(date) && !holidays.has(date)) workingDays++;
+    }
+
+    const deductionMultiplier = parseFloat(settings['late_deduction_per_minute'] ?? '1');
+    const bonusMultiplier = parseFloat(settings['overtime_bonus_per_minute'] ?? '1');
+    const paidAbsenceAllowance = Math.max(0, Number(settings['monthly_paid_leave_days'] ?? 0));
+    const absenceEnabled = String(settings['absence_deduction_enabled'] ?? '0') === '1';
+    const absenceDeductionPerDay = Math.max(0, Number(settings['absence_deduction_per_day'] ?? 0));
 
     const loansRes = await env.DB.prepare("SELECT id, employee_id, remaining_amount FROM Loans WHERE status = 'approved' ORDER BY created_at ASC").bind().all();
     const loansMap = new Map<number, any[]>();
@@ -503,6 +518,10 @@ export async function handleAdminRoutes(
 
       const lateMinutes = lateMap.get(employee.id) || 0;
       const overtimeMinutes = otMap.get(employee.id) || 0;
+      const presentDays = presentMap.get(employee.id) || 0;
+      const approvedLeaveDays = leaveMap.get(employee.id) || 0;
+      const rawAbsenceDays = Math.max(0, workingDays - presentDays - approvedLeaveDays);
+      const absenceDays = absenceEnabled ? Math.max(0, rawAbsenceDays - paidAbsenceAllowance) : 0;
       const activeLoans = loansMap.get(employee.id) || [];
       const activeLoanAmount = activeLoans.reduce((sum, l) => sum + (l.remaining_amount || 0), 0);
 
@@ -512,6 +531,8 @@ export async function handleAdminRoutes(
         lateMinutes,
         overtimeMinutes,
         activeLoan: activeLoanAmount,
+        absenceDays,
+        absenceDeductionPerDay,
         daysInMonth,
         deductionMultiplier,
         bonusMultiplier
@@ -531,7 +552,10 @@ export async function handleAdminRoutes(
         const newStatus = newRemaining <= 0.01 ? 'paid' : 'approved'; // 0.01 for floating point safety
         batchStatements.push(
           env.DB.prepare("UPDATE Loans SET remaining_amount = ?, status = ? WHERE id = ?")
-            .bind(newRemaining, newStatus, loan.id)
+            .bind(newRemaining, newStatus, loan.id),
+          env.DB.prepare(`INSERT OR IGNORE INTO LoanPayments (loan_id, employee_id, payroll_id, month, amount)
+            SELECT ?, ?, p.id, ?, ? FROM Payroll p WHERE p.employee_id = ? AND p.month = ?`)
+            .bind(loan.id, employee.id, month, deductAmount, employee.id, month)
         );
       }
       
