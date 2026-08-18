@@ -1,5 +1,7 @@
 import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
+import { getAdmins } from './db/employees.db';
+import { logAction } from './db/audit.db';
 
 // Commands
 import { registerStartCommand }     from './handlers/commands/start.command';
@@ -17,6 +19,19 @@ import { registerMessageHandler } from './handlers/messages.handler';
 let bot: Bot | null = null;
 let cb: any = null;
 
+async function recordWebhookError(env: Env, action: string, details: string): Promise<void> {
+  try {
+    const admins = await getAdmins(env);
+    if (admins.length > 0) {
+      await logAction(env, admins[0].id, action, details);
+    } else {
+      console.error('[Audit Error] No active admin available for webhook error record');
+    }
+  } catch (auditErr) {
+    console.error('[Audit Error] Failed to record webhook error', auditErr);
+  }
+}
+
 function getBot(env: Env) {
   if (bot) return { bot, cb };
   
@@ -31,7 +46,7 @@ function getBot(env: Env) {
       console.error('[Bot Error]', err);
       try {
         const errorDetails = err instanceof Error ? err.stack || err.message : JSON.stringify(err);
-        await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'WEBHOOK_ERROR', ?)").bind(String(errorDetails).substring(0, 500)).run().catch(() => {});
+        await recordWebhookError(env, 'WEBHOOK_ERROR', String(errorDetails).substring(0, 500));
         if (ctx.chat) {
           await ctx.reply(`❌ حدث خطأ داخلي في الخادم. يرجى المحاولة لاحقاً.`, { parse_mode: 'HTML' }).catch(() => {});
         }
@@ -80,7 +95,7 @@ export const handleWebhook = async (request: Request, env: Env): Promise<Respons
     console.error('[Webhook Error]', err);
     try {
       const errorDetails = err instanceof Error ? err.stack || err.message : JSON.stringify(err);
-      await env.DB.prepare("INSERT INTO AuditLogs (admin_id, action, details) VALUES (0, 'WEBHOOK_CRITICAL_ERROR', ?)").bind(String(errorDetails).substring(0, 500)).run().catch(() => {});
+      await recordWebhookError(env, 'WEBHOOK_CRITICAL_ERROR', String(errorDetails).substring(0, 500));
     } catch (_) {}
     return new Response('OK', { status: 200 });
   }

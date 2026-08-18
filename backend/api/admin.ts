@@ -386,31 +386,51 @@ export async function handleAdminRoutes(
 
   // ── Audit Logs ──────────────────────────────────────────────
   if (path === '/api/admin/audit-logs' && method === 'GET') {
-    const res = await env.DB.prepare(`
-      SELECT a.*, e.full_name as admin_name 
-      FROM AuditLogs a 
-      LEFT JOIN Employees e ON a.admin_id = e.id 
-      ORDER BY a.created_at DESC 
-      LIMIT 100
-    `).all();
-    return jsonResponse(res.results, 200, env);
+    const limitRaw = Number(url.searchParams.get('limit') || '50');
+    const offsetRaw = Number(url.searchParams.get('offset') || '0');
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 100) : 50;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(Math.floor(offsetRaw), 0) : 0;
+    const action = (url.searchParams.get('action') || '').trim().slice(0, 50);
+    const where = action ? 'WHERE a.action = ?' : '';
+    const params = action ? [action] : [];
+    const [rows, count] = await Promise.all([
+      env.DB.prepare(`
+        SELECT a.*, e.full_name as admin_name
+        FROM AuditLogs a
+        LEFT JOIN Employees e ON a.admin_id = e.id
+        ${where}
+        ORDER BY a.created_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset).all(),
+      env.DB.prepare(`SELECT COUNT(*) as total FROM AuditLogs a ${where}`).bind(...params).first<{ total: number }>()
+    ]);
+    return jsonResponse({
+      items: rows.results,
+      pagination: { limit, offset, total: Number(count?.total || 0), hasMore: offset + rows.results.length < Number(count?.total || 0) },
+      filter: action || null
+    }, 200, env);
   }
 
   if (path === '/api/admin/audit-logs' && method === 'DELETE') {
-    const body = await request.json() as { ids?: number[] };
-    if (!body.ids || !Array.isArray(body.ids) || body.ids.length === 0) {
+    const body = await request.json() as { ids?: unknown };
+    if (!Array.isArray(body.ids) || body.ids.length === 0) {
       return jsonResponse({ error: 'IDs array is required' }, 400, env);
     }
     if (body.ids.length > 100) {
       return jsonResponse({ error: 'الحد الأقصى للحذف في الدفعة الواحدة هو 100 سجل لتجنب ضغط قواعد البيانات.' }, 400, env);
     }
-    
-    // Batch delete
-    const statements = body.ids.map(id => 
+    const ids = body.ids.filter((id): id is number => Number.isInteger(id) && id > 0);
+    if (ids.length !== body.ids.length) {
+      return jsonResponse({ error: 'كل معرّفات السجل يجب أن تكون أرقاماً صحيحة موجبة.' }, 400, env);
+    }
+
+    const statements = ids.map(id =>
       env.DB.prepare('DELETE FROM AuditLogs WHERE id = ?').bind(id)
     );
     await env.DB.batch(statements);
-    return jsonResponse({ success: true, count: statements.length }, 200, env);
+    // Keep an accountability event for the destructive operation itself.
+    await logAction(env, adminId, 'DELETE_AUDIT_LOGS', 'Deleted ' + ids.length + ' audit log record(s)');
+    return jsonResponse({ success: true, count: ids.length }, 200, env);
   }
 
   // ── GET Payroll List ──────────────────────────────────────────
