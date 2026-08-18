@@ -4,6 +4,7 @@
 import * as ExcelJS from 'exceljs';
 import { Env } from '../types';
 import { calculatePayroll } from '../utils/payroll';
+import { isWeekend } from '../utils/time';
 
 export async function exportEmployeesExcel(env: Env): Promise<Response> {
   const result = await env.DB.prepare(
@@ -172,6 +173,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
     { header: 'القسم', key: 'department_name', width: 20 },
     { header: 'الراتب الأساسي', key: 'base_salary', width: 15 },
     { header: 'أيام الحضور', key: 'present_days', width: 15 },
+    { header: 'أيام الغياب المحتسبة', key: 'absence_days', width: 18 },
+    { header: 'قيمة خصم الغياب', key: 'absence_deduction', width: 18 },
     { header: 'دقائق التأخير', key: 'late_minutes', width: 15 },
     { header: 'قيمة خصم التأخير', key: 'late_deduction', width: 15 },
     { header: 'دقائق الأوفر تايم', key: 'overtime_minutes', width: 15 },
@@ -195,10 +198,24 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   `).bind(startDate, endDate).all();
   
   const attMap = new Map((attRes.results as any[]).map(r => [r.employee_id, {
-    present_days: r.present_days || 0,
-    late_minutes: r.late_minutes || 0,
-    overtime_minutes: r.overtime_minutes || 0
+    present_days: Number(r.present_days || 0),
+    late_minutes: Number(r.late_minutes || 0),
+    overtime_minutes: Number(r.overtime_minutes || 0)
   }]));
+
+  const holidayRes = await env.DB.prepare('SELECT holiday_date FROM Holidays WHERE holiday_date >= ? AND holiday_date <= ?').bind(startDate, endDate).all();
+  const holidays = new Set((holidayRes.results as any[]).map(r => String(r.holiday_date)));
+  let workingDays = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = startDate.slice(0, 8) + String(day).padStart(2, '0');
+    if (!isWeekend(date) && !holidays.has(date)) workingDays++;
+  }
+  const presentMap = new Map((attRes.results as any[]).map(r => [r.employee_id, Number(r.present_days || 0)]));
+  const leaveRes = await env.DB.prepare('SELECT employee_id, SUM(julianday(end_date) - julianday(start_date) + 1) AS leave_days FROM Leaves WHERE status = \'approved\' AND start_date <= ? AND end_date >= ? GROUP BY employee_id').bind(endDate, startDate).all();
+  const leaveMap = new Map((leaveRes.results as any[]).map(r => [r.employee_id, Number(r.leave_days || 0)]));
+  const absenceEnabled = String(settings['absence_deduction_enabled'] ?? '0') === '1';
+  const paidAbsenceAllowance = Math.max(0, Number(settings['monthly_paid_leave_days'] ?? 0));
+  const absenceDeductionPerDay = Math.max(0, Number(settings['absence_deduction_per_day'] ?? 0));
 
   // Fetch ALL active loans (remaining_amount) regardless of creation date
   const activeLoansRes = await env.DB.prepare(`
@@ -213,6 +230,10 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
   for (const emp of empRes.results as any[]) {
     const att = attMap.get(emp.id) || { present_days: 0, late_minutes: 0, overtime_minutes: 0 };
     const loansAmount = loansMap.get(emp.id) || 0;
+    const presentDays = presentMap.get(emp.id) || 0;
+    const approvedLeaveDays = leaveMap.get(emp.id) || 0;
+    const rawAbsenceDays = Math.max(0, workingDays - presentDays - approvedLeaveDays);
+    const absenceDays = absenceEnabled ? Math.max(0, rawAbsenceDays - paidAbsenceAllowance) : 0;
     
     const base_salary = emp.base_salary || 0;
     
@@ -222,6 +243,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       lateMinutes: att.late_minutes,
       overtimeMinutes: att.overtime_minutes,
       activeLoan: loansAmount,
+      absenceDays,
+      absenceDeductionPerDay,
       daysInMonth,
       deductionMultiplier: deductionRate,
       bonusMultiplier: bonusRate
@@ -232,6 +255,8 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       full_name: emp.full_name,
       department_name: emp.department_name ?? 'بدون قسم',
       base_salary: base_salary,
+      absence_days: absenceDays,
+      absence_deduction: payroll.absenceDeduction,
       present_days: att.present_days,
       late_minutes: att.late_minutes,
       late_deduction: payroll.lateDeduction,
