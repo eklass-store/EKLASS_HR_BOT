@@ -48,6 +48,14 @@
 
     <!-- State: Success -->
     <div v-else class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="flex items-center justify-between gap-3 px-6 py-3 border-b border-gray-100 text-sm text-gray-500">
+        <span>إجمالي السجلات: {{ totalLogs }}</span>
+        <div class="flex items-center gap-2">
+          <button @click="previousPage" :disabled="page === 0 || loading" class="px-3 py-1 rounded-lg border disabled:opacity-40">السابق</button>
+          <span>صفحة {{ page + 1 }}</span>
+          <button @click="nextPage" :disabled="!hasMore || loading" class="px-3 py-1 rounded-lg border disabled:opacity-40">التالي</button>
+        </div>
+      </div>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-100">
           <thead class="bg-gray-50/50">
@@ -155,6 +163,10 @@ interface AuditLog {
 }
 
 const logs = ref<AuditLog[]>([])
+const totalLogs = ref(0)
+const page = ref(0)
+const pageSize = 50
+const hasMore = ref(false)
 const loading = ref(true)
 const error = ref('')
 const selectedIds = ref<number[]>([])
@@ -194,11 +206,28 @@ const fetchLogs = async () => {
   error.value = ''
   selectedIds.value = []
   try {
-    logs.value = await apiFetch('/admin/audit-logs')
+    const response = await apiFetch(`/admin/audit-logs?limit=${pageSize}&offset=${page.value * pageSize}`)
+    logs.value = response.items || []
+    totalLogs.value = Number(response.pagination?.total || 0)
+    hasMore.value = Boolean(response.pagination?.hasMore)
   } catch (err: any) {
     error.value = err.message || 'فشل تحميل السجلات'
   } finally {
     loading.value = false
+  }
+}
+
+const previousPage = () => {
+  if (page.value > 0) {
+    page.value -= 1
+    fetchLogs()
+  }
+}
+
+const nextPage = () => {
+  if (hasMore.value) {
+    page.value += 1
+    fetchLogs()
   }
 }
 
