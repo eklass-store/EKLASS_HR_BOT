@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">نظرة عامة</h1>
-        <p class="mt-1 text-sm text-gray-500">مرحباً بك في نظام إدارة الموارد البشرية Challengawy HR.</p>
+        <p class="mt-1 text-sm text-gray-500">مرحباً بك في نظام Challengawy لإدارة الموارد البشرية.</p>
       </div>
       <div class="flex items-center gap-3">
         <span class="text-sm font-medium text-gray-500">{{ currentDate }}</span>

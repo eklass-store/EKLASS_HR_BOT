@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-sm border border-gray-100">
       <div class="text-center">
-        <h2 class="mt-2 text-3xl font-bold text-gray-900 tracking-tight">Challengawy HR</h2>
+        <h2 class="mt-2 text-3xl font-bold text-gray-900 tracking-tight">Challengawy</h2>
         <p class="mt-2 text-sm text-gray-500">بوابة دخول المشرفين</p>
       </div>
       
@@ -33,7 +33,7 @@ const error = ref('')
 const telegramWidget = ref<HTMLElement | null>(null)
 
 onMounted(() => {
-  const botUsername = import.meta.env.VITE_BOT_USERNAME || 'challengawy_hr_bot' 
+  const botUsername = import.meta.env.VITE_BOT_USERNAME || 'challengawy_bot' 
   
   ;(window as any).onTelegramAuth = async (user: any) => {
     try {
