@@ -12,6 +12,7 @@ export interface Env {
   API_KEY?: string;
   INITIAL_ADMIN_ID?: string;
   ALLOWED_ORIGIN?: string; // نطاق الداشبورد — مثال: https://challengawy.xyz
+  PUBLIC_APP_URL?: string; // الرابط الأساسي الذي يُسجل في Telegram Webhook
 }
 
 export interface Employee {
