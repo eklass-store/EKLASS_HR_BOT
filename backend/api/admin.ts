@@ -327,13 +327,14 @@ export async function handleAdminRoutes(
     const chunkSize = 50;
     for (let i = 0; i < employees.length; i += chunkSize) {
       const chunk = employees.slice(i, i + chunkSize);
-      const promises = chunk.map(e => 
-        fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+      const promises = chunk.map(e => {
+        if (e.id === adminId) return Promise.resolve(0);
+        return fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: e.telegram_id, text: `📢 *تعميم إداري:*\n\n${escapeMarkdown(message)}`, parse_mode: 'Markdown' }),
-        }).then(res => res.ok ? 1 : 0).catch(() => 0)
-      );
+        }).then(res => res.ok ? 1 : 0).catch(() => 0);
+      });
       const results = await Promise.all(promises);
       sentCount += results.reduce((a, b) => a + (b as number), 0);
     }
