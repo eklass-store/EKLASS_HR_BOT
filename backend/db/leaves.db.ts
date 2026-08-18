@@ -50,7 +50,7 @@ export async function getEmployeeLeaves(env: Env, employeeId: number): Promise<L
 export async function getLeaveBalance(
   env: Env,
   employeeId: number
-): Promise<{ approved: number; pending: number; quota: number }> {
+): Promise<{ approved: number; pending: number; quota: number; monthlyQuota: number; monthlyApproved: number; monthlyPending: number }> {
   const year = new Date().getFullYear().toString();
 
   const approved = await env.DB.prepare(
@@ -64,12 +64,36 @@ export async function getLeaveBalance(
   // Get quota from settings
   const { getSettings } = await import('./settings.db');
   const settings = await getSettings(env);
-  const quota = parseInt(settings['annual_leave_quota'] ?? '21');
+  const baseQuota = parseInt(settings['annual_leave_quota'] ?? '21');
+  const monthlyQuota = Math.max(0, parseInt(settings['monthly_paid_leave_days'] ?? '2'));
+  const month = new Date().toISOString().slice(0, 7);
+  const monthlyApprovedRow = await env.DB.prepare(
+    "SELECT CAST(SUM(julianday(end_date) - julianday(start_date) + 1) AS INTEGER) AS c FROM Leaves WHERE employee_id = ? AND status = 'approved' AND start_date LIKE ?"
+  ).bind(employeeId, month + '%').first() as any;
+  const monthlyPendingRow = await env.DB.prepare(
+    "SELECT CAST(SUM(julianday(end_date) - julianday(start_date) + 1) AS INTEGER) AS c FROM Leaves WHERE employee_id = ? AND status = 'pending' AND start_date LIKE ?"
+  ).bind(employeeId, month + '%').first() as any;
 
-  return { 
-    approved: approved?.c ?? 0, 
+  // مكافأة إجازات اختيارية: كل شهر تجاوز فيه الحضور الحد ولم تُستخدم إجازة معتمدة.
+  const threshold = Math.max(0, parseInt(settings['attendance_bonus_threshold_days'] ?? '15'));
+  const bonusDays = Math.max(0, parseInt(settings['attendance_bonus_leave_days'] ?? '4'));
+  const attendanceMonths = await env.DB.prepare(
+    "SELECT strftime('%Y-%m', date) AS month, COUNT(*) AS days FROM Attendance WHERE employee_id = ? AND date LIKE ? AND check_in_time IS NOT NULL GROUP BY strftime('%Y-%m', date)"
+  ).bind(employeeId, year + '%').all();
+  const usedLeaveMonths = await env.DB.prepare(
+    "SELECT DISTINCT substr(start_date, 1, 7) AS month FROM Leaves WHERE employee_id = ? AND status = 'approved' AND start_date LIKE ?"
+  ).bind(employeeId, year + '%').all();
+  const usedMonths = new Set((usedLeaveMonths.results as any[]).map(r => String(r.month)));
+  const bonusMonths = (attendanceMonths.results as any[]).filter(r => Number(r.days || 0) > threshold && !usedMonths.has(String(r.month))).length;
+  const quota = baseQuota + (bonusMonths * bonusDays);
+
+  return {
+    approved: approved?.c ?? 0,
     pending: pending?.c ?? 0,
-    quota
+    quota,
+    monthlyQuota,
+    monthlyApproved: monthlyApprovedRow?.c ?? 0,
+    monthlyPending: monthlyPendingRow?.c ?? 0
   };
 }
 
