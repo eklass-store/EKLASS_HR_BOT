@@ -48,7 +48,7 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
 
     if (!isOffDay && currMins < startMins - earliestMinutes) {
        await ctx.editMessageText(
-         `⚠️ *وقت مبكر جداً!*\n\nلا يمكنك تسجيل الحضور الآن.\nموعد بدء الدوام هو: *${startTime}*\n_(يمكنك تسجيل الحضور قبل الموعد بساعتين كحد أقصى)_`, 
+         `⚠️ *وقت مبكر جداً!*\n\nلا يمكنك تسجيل الحضور الآن.\nموعد بدء الدوام هو: *${startTime}*\n_(يمكنك تسجيل الحضور قبل الموعد بـ ${earliestMinutes} دقيقة كحد أقصى)_`, 
          { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
        );
        return ctx.answerCallbackQuery();
@@ -64,7 +64,7 @@ export function registerAttendanceCallbacks(bot: Bot, env: Env): void {
     if (rawLateMinutes > absenceThreshold) {
       await createAttendance(env, emp.id, date, null, 0);
       await ctx.editMessageText(
-        `❌ *عفواً! لقد تجاوزت حد التأخير المسموح به (ساعة).* \n\nوقت الدوام: ${startTime}\nوقتك الحالي: ${time}\nالتأخير: ${lateMinutes} دقيقة\n\nتم تسجيلك **غياب** لهذا اليوم ولن تتمكن من تسجيل الحضور.`,
+        `❌ *عفواً! لقد تجاوزت حد التأخير المسموح به (${absenceThreshold} دقيقة).* \n\nوقت الدوام: ${startTime}\nوقتك الحالي: ${time}\nالتأخير: ${lateMinutes} دقيقة\n\nتم تسجيلك **غياب** لهذا اليوم ولن تتمكن من تسجيل الحضور.`,
         { parse_mode: 'Markdown', reply_markup: getMainMenu(emp.role === 'admin') }
       );
       return ctx.answerCallbackQuery();
