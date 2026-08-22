@@ -5,6 +5,19 @@
       <p class="mt-1 text-sm text-gray-500">إدارة الإعدادات العامة للعطلات الرسمية وأوقات العمل وتذكيرات النظام.</p>
     </div>
 
+    <!-- Telegram Webhook -->
+    <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-6 py-5 bg-gray-50 border-b border-gray-200">
+        <h3 class="text-lg leading-6 font-bold text-gray-900">اتصال بوت Telegram</h3>
+        <p class="text-xs text-gray-500 mt-1">فحص واستعادة استقبال رسائل الموظفين والمديرين.</p>
+      </div>
+      <div class="p-6 flex flex-wrap items-center gap-3">
+        <button @click="checkWebhook" :disabled="webhookLoading" class="px-4 py-2 rounded-md text-sm font-medium text-white bg-gray-700 hover:bg-gray-800 disabled:opacity-50">فحص الحالة</button>
+        <button @click="setWebhook" :disabled="webhookLoading" class="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">إعادة ربط البوت</button>
+        <span v-if="webhookStatus" class="text-sm text-gray-700">{{ webhookStatus }}</span>
+      </div>
+    </div>
+
     <!-- Work Hours Settings -->
     <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
       <div class="px-6 py-5 bg-gray-50 border-b border-gray-200">
@@ -149,6 +162,8 @@ const showAddHolidayModal = ref(false)
 const saving = ref(false)
 const newHoliday = ref({ description: '', holiday_date: '' })
 const settingsData = ref<any>({ overtime_bonus_per_minute: '2' })
+const webhookStatus = ref('')
+const webhookLoading = ref(false)
 
 const loadData = async () => {
   loading.value = true
@@ -160,6 +175,34 @@ const loadData = async () => {
     console.error('Failed to load settings', err)
   } finally {
     loading.value = false
+  }
+}
+
+
+const checkWebhook = async () => {
+  webhookLoading.value = true
+  try {
+    const result = await apiFetch('/webhook-info')
+    const info = result?.result || result
+    webhookStatus.value = info?.last_error_message
+      ? `يوجد خطأ: ${info.last_error_message}`
+      : (info?.url ? `متصل: ${info.url}` : 'لا يوجد Webhook مسجل')
+  } catch (err: any) {
+    webhookStatus.value = err.message || 'تعذر فحص الحالة'
+  } finally {
+    webhookLoading.value = false
+  }
+}
+
+const setWebhook = async () => {
+  webhookLoading.value = true
+  try {
+    const result = await apiFetch('/set-webhook', { method: 'POST' })
+    webhookStatus.value = result?.data?.description || 'تمت إعادة ربط البوت بنجاح'
+  } catch (err: any) {
+    webhookStatus.value = err.message || 'فشل إعادة الربط'
+  } finally {
+    webhookLoading.value = false
   }
 }
 
