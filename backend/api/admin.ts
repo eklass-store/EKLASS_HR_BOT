@@ -499,6 +499,13 @@ export async function handleAdminRoutes(
     const absenceEnabled = String(settings['absence_deduction_enabled'] ?? '0') === '1';
     const absenceDeductionPerDay = Math.max(0, Number(settings['absence_deduction_per_day'] ?? 0));
 
+    const attendanceDetailsRes = await env.DB.prepare("SELECT employee_id, date, check_in_time, check_out_time, late_minutes, overtime_minutes FROM Attendance WHERE date >= ? AND date <= ? ORDER BY date ASC").bind(startDate, endDate).all();
+    const attendanceDetailsMap = new Map<number, any[]>();
+    for (const row of attendanceDetailsRes.results as any[]) {
+      if (!attendanceDetailsMap.has(row.employee_id)) attendanceDetailsMap.set(row.employee_id, []);
+      attendanceDetailsMap.get(row.employee_id)!.push(row);
+    }
+
     const loansRes = await env.DB.prepare("SELECT id, employee_id, remaining_amount FROM Loans WHERE status = 'approved' ORDER BY created_at ASC").bind().all();
     const loansMap = new Map<number, any[]>();
     for (const r of loansRes.results as any[]) {
@@ -510,6 +517,7 @@ export async function handleAdminRoutes(
     let skippedCount = 0;
     const batchStatements: any[] = [];
     const notificationPromises: Promise<any>[] = [];
+    const issuedDetails: any[] = [];
 
     for (const employee of employees) {
       if (existingEmpIds.has(employee.id)) {
@@ -560,29 +568,10 @@ export async function handleAdminRoutes(
         );
       }
       
-      if (employee.telegram_id) {
-        let msgText = `💰 *تم إصدار راتبك لشهر ${month}*\n\nالراتب الأساسي: ${payroll.dynamicMonthSalary.toFixed(2)} ج.م\n`;
-        if (payroll.overtimeBonus > 0) msgText += `الإضافي: ${payroll.overtimeBonus.toFixed(2)} ج.م\n`;
-        msgText += `إجمالي الخصومات/السلف: ${payroll.totalDed.toFixed(2)} ج.م\n*الصافي المستحق:* ${payroll.netSalary.toFixed(2)} ج.م\n\nهل استلمت راتبك يداً بيد؟`;
-        const keyboard = {
-          inline_keyboard: [[
-            { text: "✅ تأكيد الاستلام", callback_data: `confirm_payroll_${employee.id}_${month}` }
-          ]]
-        };
-        notificationPromises.push(
-          fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: employee.telegram_id,
-              text: msgText,
-              parse_mode: 'Markdown',
-              reply_markup: keyboard
-            })
-          })
-        );
-      }
-      
+      issuedDetails.push({
+        employee, payroll, lateMinutes, overtimeMinutes, presentDays, approvedLeaveDays, absenceDays,
+        attendance: attendanceDetailsMap.get(employee.id) || []
+      });
       issuedCount++;
 
       // Process notifications in chunks to avoid OOM
@@ -598,6 +587,17 @@ export async function handleAdminRoutes(
         await env.DB.batch(chunk);
       }
       
+      // Send each statement after the database batch succeeds.
+      for (const detail of issuedDetails) {
+        if (!detail.employee.telegram_id) continue;
+        const daily = detail.attendance.map((a: any) => `${a.date}: حضور ${a.check_in_time || '—'} | انصراف ${a.check_out_time || '—'} | تأخير ${Number(a.late_minutes || 0)} د | إضافي ${Number(a.overtime_minutes || 0)} د`);
+        let msgText = `🧾 كشف راتب شهر ${month}\n\nالموظف: ${detail.employee.full_name}\nالراتب الأساسي: ${Number(detail.payroll.dynamicMonthSalary).toFixed(2)} ج.م\nأيام الحضور: ${detail.presentDays}\nأيام الإجازة المعتمدة: ${detail.approvedLeaveDays}\nأيام الغياب المحتسبة: ${detail.absenceDays}\nدقائق التأخير: ${detail.lateMinutes}\nخصم التأخير: ${Number(detail.payroll.lateDeduction).toFixed(2)} ج.م\nدقائق الإضافي: ${detail.overtimeMinutes}\nقيمة الإضافي: ${Number(detail.payroll.overtimeBonus).toFixed(2)} ج.م\nخصم الغياب: ${Number(detail.payroll.absenceDeduction).toFixed(2)} ج.م\nخصم السلف: ${Number(detail.payroll.loanDeducted).toFixed(2)} ج.م\nإجمالي الخصومات: ${Number(detail.payroll.totalDed).toFixed(2)} ج.م\nالصافي المستحق: ${Number(detail.payroll.netSalary).toFixed(2)} ج.م`;
+        if (daily.length) msgText += `\n\n📅 تفاصيل الحضور اليومية:\n${daily.join('\n')}`;
+        msgText += '\n\nهل استلمت راتبك يداً بيد؟';
+        const keyboard = { inline_keyboard: [[{ text: '✅ تأكيد الاستلام', callback_data: `confirm_payroll_${detail.employee.id}_${month}` }]] };
+        notificationPromises.push(fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: detail.employee.telegram_id, text: msgText.slice(0, 3900), reply_markup: keyboard }) }));
+      }
+
       // Notify admins
       const admins = employees.filter(e => e.role === 'admin' && e.telegram_id);
       for (const admin of admins) {
