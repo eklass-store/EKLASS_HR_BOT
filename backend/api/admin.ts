@@ -553,12 +553,14 @@ export async function handleAdminRoutes(
       );
 
       let deductionLeft = payroll.loanDeducted;
+      const loanInstallments: any[] = [];
       for (const loan of activeLoans) {
         if (deductionLeft <= 0) break;
         const deductAmount = Math.min(deductionLeft, loan.remaining_amount);
         deductionLeft -= deductAmount;
         const newRemaining = loan.remaining_amount - deductAmount;
         const newStatus = newRemaining <= 0.01 ? 'paid' : 'approved'; // 0.01 for floating point safety
+        loanInstallments.push({ loanId: loan.id, amount: deductAmount, remaining: newRemaining, status: newStatus });
         batchStatements.push(
           env.DB.prepare("UPDATE Loans SET remaining_amount = ?, status = ? WHERE id = ?")
             .bind(newRemaining, newStatus, loan.id),
@@ -570,7 +572,7 @@ export async function handleAdminRoutes(
       
       issuedDetails.push({
         employee, payroll, lateMinutes, overtimeMinutes, presentDays, approvedLeaveDays, absenceDays,
-        attendance: attendanceDetailsMap.get(employee.id) || []
+        attendance: attendanceDetailsMap.get(employee.id) || [], loanInstallments
       });
       issuedCount++;
 
@@ -592,6 +594,7 @@ export async function handleAdminRoutes(
         if (!detail.employee.telegram_id) continue;
         const daily = detail.attendance.map((a: any) => `${a.date}: حضور ${a.check_in_time || '—'} | انصراف ${a.check_out_time || '—'} | تأخير ${Number(a.late_minutes || 0)} د | إضافي ${Number(a.overtime_minutes || 0)} د`);
         let msgText = `🧾 كشف راتب شهر ${month}\n\nالموظف: ${detail.employee.full_name}\nالراتب الأساسي: ${Number(detail.payroll.dynamicMonthSalary).toFixed(2)} ج.م\nأيام الحضور: ${detail.presentDays}\nأيام الإجازة المعتمدة: ${detail.approvedLeaveDays}\nأيام الغياب المحتسبة: ${detail.absenceDays}\nدقائق التأخير: ${detail.lateMinutes}\nخصم التأخير: ${Number(detail.payroll.lateDeduction).toFixed(2)} ج.م\nدقائق الإضافي: ${detail.overtimeMinutes}\nقيمة الإضافي: ${Number(detail.payroll.overtimeBonus).toFixed(2)} ج.م\nخصم الغياب: ${Number(detail.payroll.absenceDeduction).toFixed(2)} ج.م\nخصم السلف: ${Number(detail.payroll.loanDeducted).toFixed(2)} ج.م\nإجمالي الخصومات: ${Number(detail.payroll.totalDed).toFixed(2)} ج.م\nالصافي المستحق: ${Number(detail.payroll.netSalary).toFixed(2)} ج.م`;
+        if (detail.loanInstallments.length) msgText += `\n\n💳 أقساط السلف هذا الشهر:\n${detail.loanInstallments.map((l: any) => `سلفة #${l.loanId}: خصم ${Number(l.amount).toFixed(2)} ج.م | المتبقي ${Number(l.remaining).toFixed(2)} ج.م | ${l.status === 'paid' ? 'مسددة' : 'متبقية'}`).join('\n')}`;
         if (daily.length) msgText += `\n\n📅 تفاصيل الحضور اليومية:\n${daily.join('\n')}`;
         msgText += '\n\nهل استلمت راتبك يداً بيد؟';
         const keyboard = { inline_keyboard: [[{ text: '✅ تأكيد الاستلام', callback_data: `confirm_payroll_${detail.employee.id}_${month}` }]] };
