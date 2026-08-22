@@ -37,9 +37,6 @@ export async function exportEmployeesExcel(env: Env): Promise<Response> {
       created_at: e.created_at
     });
   }
-  if (result.results.length === 5000) {
-    worksheet.addRow({ full_name: '⚠️ تحذير: تم الوصول للحد الأقصى للتصدير (5000 سجل).' });
-  }
   
   // Generate buffer
   const buffer = await workbook.xlsx.writeBuffer();
@@ -190,7 +187,7 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
 
   // Fetch attendance aggregates
   const attRes = await env.DB.prepare(`
-    SELECT employee_id, COUNT(id) as present_days, SUM(late_minutes) as late_minutes, SUM(overtime_minutes) as overtime_minutes
+    SELECT employee_id, COUNT(check_in_time) as present_days, SUM(late_minutes) as late_minutes, SUM(overtime_minutes) as overtime_minutes
     FROM Attendance
     WHERE date >= ? AND date <= ?
     GROUP BY employee_id
@@ -266,9 +263,6 @@ export async function exportComprehensiveReport(env: Env, startDate: string, end
       loan_deduction: payroll.loanDeducted,
       net_salary: payroll.netSalary
     });
-  }
-  if (empRes.results.length === 5000) {
-    sheet.addRow({ full_name: '⚠️ تحذير: تم الوصول للحد الأقصى للتصدير (5000 سجل).' });
   }
 
   // Formatting styling
